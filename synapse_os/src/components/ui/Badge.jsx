@@ -3,12 +3,14 @@ import { cn } from '../../lib/utils';
 
 const Badge = ({ children, variant = 'default', className }) => {
   const variants = {
-    default: 'bg-slate-700/50 text-slate-300 border-slate-600',
-    success: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    warning: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    danger: 'bg-red-500/10 text-red-400 border-red-500/20',
-    info: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-    purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    default: 'bg-muted text-muted-foreground border-border',
+    success: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+    warning: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+    danger: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+    info: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
+    purple: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+    emerging: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
+    trending: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
   };
 
   return (

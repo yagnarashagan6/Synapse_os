@@ -8,8 +8,20 @@ import {
   Instagram, 
   Linkedin, 
   Youtube, 
+  Twitter,
   MoreHorizontal 
 } from 'lucide-react';
+
+const SocialIcon = ({ type, className }) => {
+  switch (type) {
+    case 'instagram': return <Instagram size={12} className={className} />;
+    case 'linkedin': return <Linkedin size={12} className={className} />;
+    case 'youtube': return <Youtube size={12} className={className} />;
+    case 'twitter': return <Twitter size={12} className={className} />;
+    case 'tiktok': return <span className={`font-bold text-[8px] ${className}`}>Tk</span>;
+    default: return null;
+  }
+};
 
 const Calendar = () => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -36,7 +48,7 @@ const Calendar = () => {
         {/* Calendar Grid */}
         <div className="lg:col-span-2 flex flex-col h-full">
             <Card className="flex-1 flex flex-col p-6">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
                     <div className="flex items-center gap-4">
                         <h2 className="text-2xl font-bold text-white">October 2026</h2>
                         <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-1">
@@ -44,10 +56,10 @@ const Calendar = () => {
                             <button className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><ChevronRight size={20}/></button>
                         </div>
                     </div>
-                    <div className="flex gap-2">
-                        <Button variant="secondary" size="sm">Day</Button>
-                        <Button variant="secondary" size="sm">Week</Button>
-                        <Button size="sm" className="bg-slate-700 text-white border-none shadow-none">Month</Button>
+                    <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                        <Button variant="secondary" size="sm" className="flex-1 md:flex-none">Day</Button>
+                        <Button variant="secondary" size="sm" className="flex-1 md:flex-none">Week</Button>
+                        <Button size="sm" className="flex-1 md:flex-none bg-slate-700 text-white border-none shadow-none">Month</Button>
                     </div>
                 </div>
 
@@ -72,9 +84,9 @@ const Calendar = () => {
                                 </span>
                                 <div className="mt-2 space-y-1">
                                     {dateEvents.map((evt, idx) => (
-                                        <div key={idx} className="flex items-center gap-1 p-1 rounded bg-purple-500/20 border border-purple-500/20 text-[10px] text-purple-200 truncate">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0" />
-                                            {evt.title}
+                                        <div key={idx} className="flex items-center gap-1 p-1 rounded bg-purple-500/20 border border-purple-500/20 text-[10px] text-purple-200 overflow-hidden">
+                                            <SocialIcon type={evt.type} className="flex-shrink-0" />
+                                            <span className="truncate">{evt.title}</span>
                                         </div>
                                     ))}
                                 </div>

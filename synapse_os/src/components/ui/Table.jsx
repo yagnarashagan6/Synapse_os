@@ -6,7 +6,7 @@ const Table = ({ headers, children, className }) => {
     <div className={cn("w-full overflow-x-auto", className)}>
       <table className="w-full text-left border-collapse">
         <thead>
-          <tr className="border-b border-slate-700/50 text-slate-400 text-sm">
+          <tr className="border-b border-border text-muted-foreground text-sm">
             {headers.map((header, idx) => (
               <th key={idx} className="pb-3 font-medium px-4 first:pl-0 last:pr-0">
                 {header}
@@ -14,7 +14,7 @@ const Table = ({ headers, children, className }) => {
             ))}
           </tr>
         </thead>
-        <tbody className="text-slate-200 text-sm">
+        <tbody className="text-foreground text-sm">
           {children}
         </tbody>
       </table>
@@ -25,7 +25,7 @@ const Table = ({ headers, children, className }) => {
 export default Table;
 
 export const TableRow = ({ children, className }) => (
-    <tr className={cn("border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors last:border-0", className)}>
+    <tr className={cn("border-b border-border hover:bg-muted/30 transition-colors last:border-0", className)}>
         {children}
     </tr>
 );

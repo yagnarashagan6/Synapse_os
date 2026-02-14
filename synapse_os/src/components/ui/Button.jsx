@@ -4,11 +4,11 @@ import { Loader2 } from 'lucide-react';
 
 const Button = ({ children, variant = 'primary', size = 'md', className, isLoading, ...props }) => {
   const variants = {
-    primary: 'bg-gradient-to-r from-purple-600 to-cyan-500 hover:opacity-90 text-white shadow-lg shadow-purple-500/20',
-    secondary: 'border border-slate-600 hover:bg-slate-800 text-slate-300',
-    ghost: 'hover:bg-slate-800/50 text-slate-400 hover:text-white',
-    danger: 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20',
-    success: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20',
+    primary: 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20',
+    secondary: 'border border-border hover:bg-muted text-muted-foreground hover:text-foreground',
+    ghost: 'hover:bg-muted/50 text-muted-foreground hover:text-foreground',
+    danger: 'bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20',
+    success: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20',
   };
 
   const sizes = {

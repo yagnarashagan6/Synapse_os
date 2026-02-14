@@ -19,27 +19,29 @@ const Sources = () => {
 
     return (
         <div className="space-y-6">
-             <div className="flex items-center justify-between">
+             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
                    <h2 className="text-2xl font-bold text-white">Data Sources</h2>
                    <p className="text-slate-400">Manage external data streams and references</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <Input icon={Search} placeholder="Search sources..." className="w-64" />
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                    <Input icon={Search} placeholder="Search sources..." className="w-full md:w-64" />
                 </div>
              </div>
 
-             <Tabs 
-                activeTab={activeTab} 
-                onChange={setActiveTab}
-                tabs={[
-                    { id: 'tiktok', label: 'TikTok References' },
-                    { id: 'blogs', label: 'Blog Sources' },
-                    { id: 'authors', label: 'Authors' },
-                    { id: 'papers', label: 'Academic Papers' },
-                ]}
-                className="w-full md:w-auto"
-             />
+             <div className="overflow-x-auto w-full pb-2">
+                 <Tabs 
+                    activeTab={activeTab} 
+                    onChange={setActiveTab}
+                    tabs={[
+                        { id: 'tiktok', label: 'TikTok References' },
+                        { id: 'blogs', label: 'Blog Sources' },
+                        { id: 'authors', label: 'Authors' },
+                        { id: 'papers', label: 'Academic Papers' },
+                    ]}
+                    className="w-full md:w-auto min-w-max"
+                 />
+             </div>
 
              <Card>
                 <div className="flex items-center gap-2 mb-4 text-slate-400 text-sm">

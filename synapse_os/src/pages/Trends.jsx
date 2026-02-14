@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTheme } from '../context/ThemeContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -64,7 +65,7 @@ const topics = [
 ];
 
 const ProgressBar = ({ value }) => (
-  <div className="w-full bg-slate-700/50 rounded-full h-2">
+  <div className="w-full bg-slate-200 dark:bg-slate-700/50 rounded-full h-2">
     <div 
       className="bg-gradient-to-r from-purple-500 to-cyan-500 h-2 rounded-full" 
       style={{ width: `${value}%` }} 
@@ -73,12 +74,21 @@ const ProgressBar = ({ value }) => (
 );
 
 const Trends = () => {
+  const { theme } = useTheme();
+  
+  // Chart Colors based on theme
+  const gridColor = theme === 'dark' ? '#334155' : '#e2e8f0';
+  const axisColor = theme === 'dark' ? '#94a3b8' : '#64748b';
+  const tooltipBg = theme === 'dark' ? '#1e293b' : '#ffffff';
+  const tooltipBorder = theme === 'dark' ? '#334155' : '#e2e8f0';
+  const tooltipText = theme === 'dark' ? '#e2e8f0' : '#0f172a';
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white">Trends Analysis</h2>
-          <p className="text-slate-400">Signals & topics radar powered by AI</p>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Trends Analysis</h2>
+          <p className="text-slate-500 dark:text-slate-400">Signals & topics radar powered by AI</p>
         </div>
         <div className="flex items-center gap-3">
             <Button variant="secondary" className="hidden md:flex">
@@ -93,7 +103,7 @@ const Trends = () => {
       </div>
 
       <Card className="h-[400px]">
-        <h3 className="text-lg font-semibold text-white mb-6">Topic Momentum Over Time</h3>
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">Topic Momentum Over Time</h3>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData}>
             <defs>
@@ -102,12 +112,13 @@ const Trends = () => {
                 <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} vertical={false} />
-            <XAxis dataKey="name" stroke="#94a3b8" axisLine={false} tickLine={false} dy={10} />
-            <YAxis stroke="#94a3b8" axisLine={false} tickLine={false} dx={-10} />
+            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} opacity={0.5} vertical={false} />
+            <XAxis dataKey="name" stroke={axisColor} axisLine={false} tickLine={false} dy={10} />
+            <YAxis stroke={axisColor} axisLine={false} tickLine={false} dx={-10} />
             <Tooltip 
-              contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px' }}
-              itemStyle={{ color: '#e2e8f0' }}
+              contentStyle={{ backgroundColor: tooltipBg, borderColor: tooltipBorder, borderRadius: '8px' }}
+              itemStyle={{ color: tooltipText }}
+              labelStyle={{ color: tooltipText }}
             />
             <Area 
               type="monotone" 
@@ -122,9 +133,9 @@ const Trends = () => {
       </Card>
 
       <Card>
-        <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-white">Top Emerging Topics</h3>
-            <Input icon={Search} placeholder="Search topics..." className="w-64" />
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Top Emerging Topics</h3>
+            <Input icon={Search} placeholder="Search topics..." className="w-full md:w-64" />
         </div>
         
         <Table headers={['Topic', 'Category', 'Trend Score', 'Velocity', 'Mentions', 'Sources', 'Actions']}>
@@ -132,26 +143,26 @@ const Trends = () => {
             <TableRow key={idx}>
               <TableCell>
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400">
                         {idx + 1}
                     </div>
-                    <span className="font-medium text-white">{topic.topic}</span>
+                    <span className="font-medium text-slate-900 dark:text-white whitespace-nowrap">{topic.topic}</span>
                 </div>
               </TableCell>
-              <TableCell>
+              <TableCell className="whitespace-nowrap">
                 <Badge variant="default">{topic.category}</Badge>
               </TableCell>
               <TableCell className="w-48">
                 <div className="flex items-center gap-3">
-                    <span className="font-bold text-white">{topic.score}</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{topic.score}</span>
                     <ProgressBar value={topic.score} />
                 </div>
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
-                    {topic.velocity === 'High' && <Zap size={16} className="text-purple-400" />}
-                    {topic.velocity === 'Rising' && <TrendingUp size={16} className="text-cyan-400" />}
-                    <span className={topic.velocity === 'High' ? 'text-purple-400' : topic.velocity === 'Rising' ? 'text-cyan-400' : 'text-slate-400'}>
+                    {topic.velocity === 'High' && <Zap size={16} className="text-purple-600 dark:text-purple-400" />}
+                    {topic.velocity === 'Rising' && <TrendingUp size={16} className="text-cyan-600 dark:text-cyan-400" />}
+                    <span className={topic.velocity === 'High' ? 'text-purple-600 dark:text-purple-400' : topic.velocity === 'Rising' ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-500 dark:text-slate-400'}>
                         {topic.velocity}
                     </span>
                 </div>

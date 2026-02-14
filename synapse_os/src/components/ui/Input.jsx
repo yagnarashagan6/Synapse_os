@@ -6,13 +6,13 @@ const Input = ({ icon: Icon, className, ...props }) => {
   return (
     <div className="relative">
       {Icon && (
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
           <Icon size={18} />
         </div>
       )}
       <input
         className={cn(
-          "glass-input w-full rounded-xl py-2 px-4 text-slate-200 placeholder:text-slate-500",
+          "glass-input w-full rounded-xl py-2 px-4 text-foreground placeholder:text-muted-foreground",
           Icon && "pl-10",
           className
         )}

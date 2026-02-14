@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTheme } from '../context/ThemeContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -32,18 +33,18 @@ const data = [
 ];
 
 const KPICard = ({ title, value, trend, icon: Icon, trendUp }) => (
-  <Card className="relative overflow-hidden group">
-    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+  <Card className="relative overflow-hidden group bg-card border-border">
+    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-foreground">
       <Icon size={64} />
     </div>
     <div className="relative z-10">
-      <div className="flex items-center gap-3 text-slate-400 mb-2">
+      <div className="flex items-center gap-3 text-muted-foreground mb-2">
         <Icon size={18} />
         <span className="text-sm font-medium">{title}</span>
       </div>
       <div className="flex items-end gap-3">
-        <h3 className="text-3xl font-bold text-white">{value}</h3>
-        <span className={`text-sm font-medium px-1.5 py-0.5 rounded ${trendUp ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>
+        <h3 className="text-3xl font-bold text-foreground">{value}</h3>
+        <span className={`text-sm font-medium px-1.5 py-0.5 rounded ${trendUp ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10'}`}>
           {trend}
         </span>
       </div>
@@ -52,6 +53,16 @@ const KPICard = ({ title, value, trend, icon: Icon, trendUp }) => (
 );
 
 const Dashboard = () => {
+  const { theme } = useTheme();
+  
+  // Chart Colors based on theme - using CSS variables would be ideal but Recharts needs hex strings in some places or strict manipulation
+  // We can use the strings we know are associated with our CSS vars for simplicity in this context
+  const gridColor = theme === 'dark' ? '#334155' : '#e2e8f0';
+  const axisColor = theme === 'dark' ? '#94a3b8' : '#64748b';
+  const tooltipBg = theme === 'dark' ? '#1e293b' : '#ffffff';
+  const tooltipBorder = theme === 'dark' ? '#334155' : '#e2e8f0';
+  const tooltipText = theme === 'dark' ? '#f8fafc' : '#0f172a';
+
   return (
     <div className="space-y-6">
       {/* KPI Section */}
@@ -87,33 +98,34 @@ const Dashboard = () => {
       </div>
 
       {/* Main Chart Section */}
-      <Card className="h-[400px]">
+      <Card className="h-[400px] bg-card border-border">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-lg font-semibold text-white">Trends Overview</h3>
-            <p className="text-sm text-slate-400">Competitive intelligence analysis across platforms</p>
+            <h3 className="text-lg font-semibold text-foreground">Trends Overview</h3>
+            <p className="text-sm text-muted-foreground">Competitive intelligence analysis across platforms</p>
           </div>
           <Button variant="secondary" size="sm">Download Report</Button>
         </div>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} opacity={0.5} vertical={false} />
             <XAxis 
               dataKey="name" 
-              stroke="#94a3b8" 
+              stroke={axisColor} 
               axisLine={false} 
               tickLine={false} 
               dy={10}
             />
             <YAxis 
-              stroke="#94a3b8" 
+              stroke={axisColor} 
               axisLine={false} 
               tickLine={false} 
               dx={-10}
             />
             <Tooltip 
-              contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px' }}
-              itemStyle={{ color: '#e2e8f0' }}
+              contentStyle={{ backgroundColor: tooltipBg, borderColor: tooltipBorder, borderRadius: '8px' }}
+              itemStyle={{ color: tooltipText }}
+              labelStyle={{ color: tooltipText }}
             />
             <Line 
               type="monotone" 
@@ -146,33 +158,33 @@ const Dashboard = () => {
       {/* Bottom Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Emerging Topics */}
-        <Card>
+        <Card className="bg-card border-border">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Emerging Topics</h3>
+            <h3 className="text-lg font-semibold text-foreground">Emerging Topics</h3>
             <Button variant="ghost" size="icon"><MoreHorizontal size={18}/></Button>
           </div>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 hover:bg-slate-700/50 transition-colors cursor-pointer">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-border hover:bg-muted transition-colors cursor-pointer">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                   <TrendingUp size={20} />
                 </div>
                 <div>
-                  <h4 className="font-medium text-slate-200">Sustainable Materials</h4>
-                  <p className="text-xs text-slate-400">High velocity • 12k mentions</p>
+                  <h4 className="font-medium text-foreground">Sustainable Materials</h4>
+                  <p className="text-xs text-muted-foreground">High velocity • 12k mentions</p>
                 </div>
               </div>
               <Badge variant="emerging">Earlier Adopter</Badge>
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 hover:bg-slate-700/50 transition-colors cursor-pointer">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-border hover:bg-muted transition-colors cursor-pointer">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">
+                <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400">
                   <Zap size={20} />
                 </div>
                 <div>
-                  <h4 className="font-medium text-slate-200">AI-Powered Design</h4>
-                  <p className="text-xs text-slate-400">Trending • 8.5k mentions</p>
+                  <h4 className="font-medium text-foreground">AI-Powered Design</h4>
+                  <p className="text-xs text-muted-foreground">Trending • 8.5k mentions</p>
                 </div>
               </div>
               <Badge variant="trending">Trending</Badge>
@@ -181,36 +193,36 @@ const Dashboard = () => {
         </Card>
 
         {/* Next Best Actions */}
-        <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-purple-500/20">
+        <Card className="bg-card border-border">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Next Best Actions</h3>
+            <h3 className="text-lg font-semibold text-foreground">Next Best Actions</h3>
             <Badge variant="purple">AI Suggested</Badge>
           </div>
           <div className="space-y-3">
-            <div className="flex items-center justify-between group cursor-pointer hover:bg-white/5 p-2 rounded-lg transition-colors">
+            <div className="flex items-center justify-between group cursor-pointer hover:bg-muted/50 p-2 rounded-lg transition-colors">
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-purple-500" />
-                <span className="text-slate-300 group-hover:text-white transition-colors">Create content plan for "Sustainable Materials"</span>
+                <span className="text-muted-foreground group-hover:text-foreground transition-colors">Create content plan for "Sustainable Materials"</span>
               </div>
-              <ArrowRight size={16} className="text-slate-500 group-hover:translate-x-1 transition-transform" />
+              <ArrowRight size={16} className="text-muted-foreground group-hover:translate-x-1 transition-transform" />
             </div>
-            <div className="flex items-center justify-between group cursor-pointer hover:bg-white/5 p-2 rounded-lg transition-colors">
+            <div className="flex items-center justify-between group cursor-pointer hover:bg-muted/50 p-2 rounded-lg transition-colors">
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-cyan-500" />
-                <span className="text-slate-300 group-hover:text-white transition-colors">Schedule post for tomorrow at 10:00 AM</span>
+                <span className="text-muted-foreground group-hover:text-foreground transition-colors">Schedule post for tomorrow at 10:00 AM</span>
               </div>
-              <ArrowRight size={16} className="text-slate-500 group-hover:translate-x-1 transition-transform" />
+              <ArrowRight size={16} className="text-muted-foreground group-hover:translate-x-1 transition-transform" />
             </div>
-            <div className="flex items-center justify-between group cursor-pointer hover:bg-white/5 p-2 rounded-lg transition-colors">
+            <div className="flex items-center justify-between group cursor-pointer hover:bg-muted/50 p-2 rounded-lg transition-colors">
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-pink-500" />
-                <span className="text-slate-300 group-hover:text-white transition-colors">Review 2 pending approvals</span>
+                <span className="text-muted-foreground group-hover:text-foreground transition-colors">Review 2 pending approvals</span>
               </div>
-              <ArrowRight size={16} className="text-slate-500 group-hover:translate-x-1 transition-transform" />
+              <ArrowRight size={16} className="text-muted-foreground group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
           
-          <div className="mt-6 pt-4 border-t border-slate-700/50">
+          <div className="mt-6 pt-4 border-t border-border">
             <Button className="w-full">
               <Bot size={18} className="mr-2" />
               Ask AI Assistant

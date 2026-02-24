@@ -10,6 +10,7 @@ import AITools from './pages/AITools';
 import Sources from './pages/Sources';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
+import Competitors from './pages/Competitors';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="sources" element={<Sources />} />
           <Route path="profile" element={<Profile />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="competitors" element={<Competitors />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

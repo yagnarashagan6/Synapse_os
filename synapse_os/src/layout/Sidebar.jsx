@@ -24,6 +24,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { icon: CheckCircle, label: 'Approvals', path: '/approvals' },
     { icon: Bot, label: 'AI Tools', path: '/ai-tools' },
     { icon: Database, label: 'Sources', path: '/sources' },
+    { icon: Bot, label: 'Competitors', path: '/competitors' },
   ];
 
   const bottomItems = [

@@ -1,6 +1,6 @@
-const axios = require('axios');
+import axios from 'axios';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -31,4 +31,4 @@ module.exports = async function handler(req, res) {
     console.error('HeyGen status error:', error.response?.data || error.message);
     return res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed' });
   }
-};
+}

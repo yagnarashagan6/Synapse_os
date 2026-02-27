@@ -1,11 +1,10 @@
-const { createClient } = require('@supabase/supabase-js');
-const { ApifyClient } = require('apify-client');
+import { createClient } from '@supabase/supabase-js';
+import { ApifyClient } from 'apify-client';
 
-// Initialize clients
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 const apifyClient = new ApifyClient({ token: process.env.APIFY_TOKEN });
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -158,4 +157,4 @@ module.exports = async function handler(req, res) {
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
-};
+}

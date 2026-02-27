@@ -1,6 +1,6 @@
-const axios = require('axios');
+import axios from 'axios';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -35,4 +35,4 @@ module.exports = async function handler(req, res) {
     console.error('Error proxying image:', error.message);
     return res.status(500).send('Error fetching image');
   }
-};
+}

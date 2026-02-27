@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.1",
+    "@supabase/supabase-js": "^2.97.0",
+    "apify-client": "^2.9.0",
+    "axios": "^1.13.5",
     "clsx": "^2.1.1",
     "framer-motion": "^12.34.1",
     "lucide-react": "^0.564.0",

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { API_BASE_URL } from '../config/apiConfig';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -220,7 +222,7 @@ const PlatformChip = ({ platform, isActive, onClick }) => {
       onClick={() => available && onClick(platform.key)}
       title={available ? label : `${label} — Coming Soon`}
       style={isActive ? { borderColor: textColor, boxShadow: `0 0 0 3px ${textColor}30` } : {}}
-      className={`relative flex flex-col items-center gap-1.5 px-5 py-3 rounded-2xl border-2 transition-all duration-200
+      className={`relative flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all duration-200
         ${isActive
           ? 'bg-card border-2 scale-105'
           : available
@@ -229,11 +231,11 @@ const PlatformChip = ({ platform, isActive, onClick }) => {
         }`}
     >
       {/* Platform icon with gradient bg */}
-      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-md`}>
-        <Icon size={20} className="text-white" />
+      <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center shadow-md shrink-0`}>
+        <Icon size={16} className="text-white" />
       </div>
       <span
-        className="text-xs font-semibold"
+        className="font-medium whitespace-nowrap"
         style={isActive ? { color: textColor } : {}}
       >
         {label}
@@ -318,6 +320,7 @@ const CompanyPanel = ({ info, metric, onClose }) => {
 
 const Dashboard = () => {
   const { theme } = useTheme();
+  const navigate = useNavigate();
 
   const [activePlatform, setActivePlatform] = useState('instagram');
   const [activeMetric,   setActiveMetric]   = useState('likes');
@@ -342,7 +345,7 @@ const Dashboard = () => {
 
   // Fetch once on mount
   useEffect(() => {
-    fetch('http://localhost:5000/api/competitors')
+    fetch(`${API_BASE_URL}/api/competitors`)
       .then((r) => r.json())
       .then((data) => setCompetitors(Array.isArray(data) ? data : []))
       .catch(console.error)
@@ -601,7 +604,19 @@ const Dashboard = () => {
                     <p className="text-xs text-muted-foreground">{sub}</p>
                   </div>
                 </div>
-                <Badge variant={variant}>{badge}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={variant}>{badge}</Badge>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate('/poster-generator', { state: { defaultTopic: label } });
+                    }}
+                    className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                    title="Generate Poster"
+                  >
+                    <Bot size={16} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

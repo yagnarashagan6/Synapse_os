@@ -5,6 +5,10 @@ const { ApifyClient } = require('apify-client');
 const axios = require('axios');
 require('dotenv').config();
 
+// Fix for Node.js undici / fetch IPv6 timeout issues in localhost
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -22,6 +26,16 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const apifyClient = new ApifyClient({
     token: APIFY_TOKEN,
 });
+
+// Verify API Keys on Startup (useful for debugging, avoid logging full secret)
+if (process.env.HYGEN_API_KEY) {
+    const key = process.env.HYGEN_API_KEY;
+    const masked = key.substring(0, 8) + '...' + key.substring(key.length - 4);
+    console.log(`Hygen API Key loaded: ${masked}`);
+    console.log(`No other API keys are required for Hygen.`);
+} else {
+    console.warn(`WARNING: HYGEN_API_KEY is not defined in the environment.`);
+}
 
 
 // Connect to MongoDB (Removed)
@@ -259,6 +273,82 @@ app.get('/api/proxy-image', async (req, res) => {
         console.error('Error proxying image:', error.message);
          // If generic axios error, send 500
         res.status(500).send('Error fetching image');
+    }
+});
+
+// POST /api/hygen/generate - Proxy for HeyGen Video API
+app.post('/api/hygen/generate', async (req, res) => {
+    const hygenApiKey = process.env.HYGEN_API_KEY;
+    
+    if (!hygenApiKey) {
+        return res.status(500).json({ error: 'HeyGen API key is not configured on the server.' });
+    }
+
+    try {
+        // We use a predefined avatar and voice, and pass the user prompt as input text.
+        const response = await axios.post(
+            'https://api.heygen.com/v2/video/generate',
+            {
+                video_inputs: [
+                    {
+                        character: {
+                            type: "avatar",
+                            avatar_id: "Angela-inTshirt-20220820",
+                            avatar_style: "normal"
+                        },
+                        voice: {
+                            type: "text",
+                            input_text: req.body.prompt || "Hello! This is a generated video.",
+                            voice_id: "1bd001e7e50f421d891986aad5158bc8"
+                        }
+                    }
+                ],
+                dimension: {
+                    width: 1080,
+                    height: 1920
+                }
+            },
+            {
+                headers: {
+                    'X-Api-Key': hygenApiKey,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 60000,
+            }
+        );
+
+        res.status(response.status).json(response.data);
+    } catch (error) {
+        console.error('HeyGen proxy error:', error.response?.data || error.message);
+        const statusCode = error.response?.status || 500;
+        const errorMessage = error.response?.data || { error: 'Failed to generate video via HeyGen API' };
+        res.status(statusCode).json(errorMessage);
+    }
+});
+
+// GET /api/hygen/status - Proxy for HeyGen Video Status
+app.get('/api/hygen/status', async (req, res) => {
+    const hygenApiKey = process.env.HYGEN_API_KEY;
+    const videoId = req.query.video_id;
+
+    if (!hygenApiKey || !videoId) {
+        return res.status(400).json({ error: 'Missing API key or video_id' });
+    }
+
+    try {
+        const response = await axios.get(
+            `https://api.heygen.com/v1/video_status.get?video_id=${videoId}`,
+            {
+                headers: {
+                    'X-Api-Key': hygenApiKey,
+                },
+                timeout: 10000,
+            }
+        );
+        res.status(response.status).json(response.data);
+    } catch (error) {
+        console.error('HeyGen status error:', error.response?.data || error.message);
+        res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed' });
     }
 });
 // DELETE /api/competitors/:id - Delete a competitor

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -75,6 +76,7 @@ const ProgressBar = ({ value }) => (
 
 const Trends = () => {
   const { theme } = useTheme();
+  const navigate = useNavigate();
   
   // Chart Colors based on theme
   const gridColor = theme === 'dark' ? '#334155' : '#e2e8f0';
@@ -170,9 +172,24 @@ const Trends = () => {
               <TableCell>{topic.mentions}</TableCell>
               <TableCell>{topic.sources}</TableCell>
               <TableCell>
-                <Button variant="ghost" size="sm" className="hover:bg-purple-500/20 hover:text-purple-300">
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="hover:bg-purple-500/20 hover:text-purple-300"
+                  >
                     Analyze <ArrowRight size={16} className="ml-2" />
-                </Button>
+                  </Button>
+                  <Button
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => navigate('/poster-generator', { state: { defaultTopic: topic.topic } })}
+                    className="hover:bg-primary/20 text-primary"
+                    title="Generate Poster"
+                  >
+                    <Zap size={16} />
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))}

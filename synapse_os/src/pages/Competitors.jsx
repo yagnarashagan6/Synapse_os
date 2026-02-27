@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/apiConfig';
 import { motion } from 'framer-motion';
 import { Search, Globe, Trash2, ExternalLink, Loader2, AlertCircle, X, MessageCircle, Heart, Calendar, ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Image as ImageIcon, Video, Layers, Zap, Eye } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -133,7 +134,7 @@ const Competitors = () => {
 
   const fetchCompetitors = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/competitors');
+      const response = await fetch(`${API_BASE_URL}/api/competitors`);
       if (!response.ok) throw new Error('Failed to fetch competitors');
       const data = await response.json();
       setCompetitors(data);
@@ -151,7 +152,7 @@ const Competitors = () => {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/competitors', {
+      const response = await fetch(`${API_BASE_URL}/api/competitors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: query }),
@@ -177,7 +178,7 @@ const Competitors = () => {
     if (!window.confirm('Are you sure you want to delete this competitor?')) return;
 
     try {
-        const response = await fetch(`http://localhost:5000/api/competitors/${id}`, {
+        const response = await fetch(`${API_BASE_URL}/api/competitors/${id}`, {
             method: 'DELETE',
         });
 
@@ -247,7 +248,7 @@ const Competitors = () => {
   const getProxyImageUrl = (url) => {
       if (!url) return null;
       // Use local backend proxy
-      return `http://localhost:5000/api/proxy-image?url=${encodeURIComponent(url)}`;
+      return `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(url)}`;
   };
 
   // Render Logic

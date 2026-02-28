@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { ApifyClient } from 'apify-client';
 
+// Force Vercel's Node File Trace (nft) to bundle this dependency
+// since apify-client dynamically requires it and Vercel often misses dynamic requires
+import 'proxy-agent';
+
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 const apifyClient = new ApifyClient({ token: process.env.APIFY_TOKEN });
 

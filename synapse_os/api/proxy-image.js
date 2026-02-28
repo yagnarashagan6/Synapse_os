@@ -32,6 +32,10 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'public, max-age=31536000');
     return res.status(200).send(Buffer.from(response.data));
   } catch (error) {
+    if (error.response && error.response.status === 403) {
+      console.warn(`[Proxy] Image signature expired (403): ${url.substring(0, 50)}...`);
+      return res.status(403).send('Image URL signature expired');
+    }
     console.error('Error proxying image:', error.message);
     return res.status(500).send('Error fetching image');
   }

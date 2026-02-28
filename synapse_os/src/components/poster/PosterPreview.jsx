@@ -1,6 +1,6 @@
 import React from 'react';
 
-const PosterPreview = ({ imageUrl, isLoading, error, onRegenerate }) => {
+const PosterPreview = ({ imageUrl, isLoading, error, onRegenerate, savedToLibrary }) => {
   const handleDownload = () => {
     if (!imageUrl) return;
     
@@ -14,14 +14,22 @@ const PosterPreview = ({ imageUrl, isLoading, error, onRegenerate }) => {
   };
 
   return (
-    <div className="glass-panel rounded-[20px] p-6 lg:p-8 flex flex-col h-full min-h-[500px]">
+    <div className="glass-panel rounded-[20px] p-6 lg:p-8 flex flex-col h-full min-h-[500px] relative z-10">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-white tracking-tight">Preview</h2>
-        {imageUrl && !isLoading && (
-          <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-xs font-medium rounded-full border border-emerald-500/20">
-            Generated
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {imageUrl && !isLoading && (
+            <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-xs font-medium rounded-full border border-emerald-500/20">
+              Generated
+            </span>
+          )}
+          {savedToLibrary && !isLoading && (
+            <span className="px-3 py-1 bg-blue-500/10 text-blue-400 text-xs font-medium rounded-full border border-blue-500/20 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+              Saved to Library
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 relative flex items-center justify-center rounded-xl bg-slate-900/40 border-2 border-dashed border-slate-800 overflow-hidden group">
@@ -32,7 +40,7 @@ const PosterPreview = ({ imageUrl, isLoading, error, onRegenerate }) => {
               <div className="h-4 bg-slate-800/50 rounded animate-pulse w-3/4 mx-auto"></div>
               <div className="h-3 bg-slate-800/50 rounded animate-pulse w-1/2 mx-auto"></div>
             </div>
-            <p className="text-slate-500 text-sm animate-bounce mt-4">AI is painting your poster...</p>
+            <p className="text-slate-500 text-sm animate-bounce mt-4">AI is generating your video... This may take a few minutes.</p>
           </div>
         ) : error ? (
           <div className="text-center p-8">

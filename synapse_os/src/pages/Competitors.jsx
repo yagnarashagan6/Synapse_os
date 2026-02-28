@@ -8,6 +8,29 @@ import Table, {
   TableCell,
 } from '../components/ui/Table';
 
+// ─── Post Image Fallback ────────────────────────────────────────────────────────
+const PostImage = ({ url, alt }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError || !url) {
+    return (
+      <div className="w-16 h-16 bg-muted rounded-md flex items-center justify-center border border-border">
+        <Globe size={20} className="text-muted-foreground/50" />
+      </div>
+    );
+  }
+
+  return (
+    <img 
+      src={url} 
+      alt={alt} 
+      onError={() => setHasError(true)}
+      className="w-16 h-16 object-cover rounded-md bg-muted border border-border" 
+    />
+  );
+};
+
+
 // ─── chart helpers ─────────────────────────────────────────────────────────────
 function shortText(str, words) {
   if (!str) return '';
@@ -185,7 +208,7 @@ const Competitors = () => {
         if (!response.ok) throw new Error('Failed to delete competitor');
 
         // Remove from local state
-        setCompetitors(prev => prev.filter(c => c.id !== id && c._id !== id));
+        setCompetitors(prev => prev.filter(c => c.id !== id));
     } catch (err) {
         console.error(err);
         alert('Failed to delete competitor');
@@ -334,17 +357,10 @@ const Competitors = () => {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            {post.displayUrl ? (
-                                                <img 
-                                                    src={getProxyImageUrl(post.displayUrl)} 
-                                                    alt="Post" 
-                                                    className="w-16 h-16 object-cover rounded-md bg-muted border border-border" 
-                                                />
-                                            ) : (
-                                                <div className="w-16 h-16 bg-muted rounded-md flex items-center justify-center border border-border">
-                                                    <Globe size={20} className="text-muted-foreground/50" />
-                                                </div>
-                                            )}
+                                            <PostImage 
+                                                url={getProxyImageUrl(post.displayUrl)} 
+                                                alt="Post preview" 
+                                            />
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2 text-muted-foreground">
@@ -522,7 +538,7 @@ const Competitors = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {competitors.map((comp) => (
           <motion.div
-            key={comp._id}
+            key={comp.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-card border border-border rounded-xl p-5 hover:shadow-md transition-all cursor-pointer group flex flex-col h-full relative overflow-hidden"
@@ -539,7 +555,7 @@ const Competitors = () => {
                     {new Date(comp.createdAt).toLocaleDateString()}
                   </span>
                   <button 
-                    onClick={(e) => handleDelete(e, comp.id || comp._id)}
+                    onClick={(e) => handleDelete(e, comp.id)}
                     className="text-muted-foreground hover:text-red-500 transition-colors p-1"
                     title="Delete Competitor"
                   >

@@ -9,3 +9,19 @@ CREATE TABLE IF NOT EXISTS competitors (
 
 -- Create an index on the name field for faster lookups
 CREATE INDEX IF NOT EXISTS idx_competitors_name ON competitors(name);
+
+-- Create the generated_videos table for HeyGen video storage
+CREATE TABLE IF NOT EXISTS generated_videos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    video_id TEXT NOT NULL,
+    video_url TEXT NOT NULL,
+    topic TEXT,
+    platform TEXT,
+    tone TEXT,
+    cta TEXT,
+    status TEXT DEFAULT 'completed',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create an index on video_id for faster lookups
+CREATE INDEX IF NOT EXISTS idx_generated_videos_video_id ON generated_videos(video_id);

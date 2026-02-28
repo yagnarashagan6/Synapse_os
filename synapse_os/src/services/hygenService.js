@@ -3,16 +3,12 @@ import { API_BASE_URL } from '../config/apiConfig';
 
 const HYGEN_API_URL = `${API_BASE_URL}/api/hygen/generate`;
 const HYGEN_STATUS_URL = `${API_BASE_URL}/api/hygen/status`;
+const VIDEOS_API_URL = `${API_BASE_URL}/api/videos`;
 
 /**
- * Generates a video using backend HeyGen proxy
+ * Generates a video using backend HeyGen proxy, then auto-saves to Supabase.
  * @param {Object} params
- * @param {string} params.topic
- * @param {string} params.platform
- * @param {string} params.size
- * @param {string} params.tone
- * @param {string} params.cta
- * @returns {Promise<string>} - Returns the generated video URL
+ * @returns {Promise<Object>} - { videoUrl, videoId, saved }
  */
 export const generatePoster = async ({ topic, platform, size, tone, cta }) => {
   const prompt = `Create a high-quality marketing script for ${topic} in ${tone} style for ${platform}. Include CTA: ${cta ? cta : 'Learn More'}.`;
@@ -37,7 +33,6 @@ export const generatePoster = async ({ topic, platform, size, tone, cta }) => {
     let status = 'processing';
     let videoUrl = null;
     
-    // Poll every 10 seconds for up to 5 minutes
     let attempts = 0;
     while ((status === 'processing' || status === 'pending') && attempts < 30) {
       await new Promise(resolve => setTimeout(resolve, 10000));
@@ -58,7 +53,17 @@ export const generatePoster = async ({ topic, platform, size, tone, cta }) => {
       throw new Error('Video generation timed out.');
     }
 
-    return videoUrl;
+    // 3. Auto-save to Supabase
+    let saved = false;
+    try {
+      await saveVideo({ video_id: videoId, video_url: videoUrl, topic, platform, tone, cta });
+      saved = true;
+      console.log('[HeyGen] Video auto-saved to Supabase');
+    } catch (saveErr) {
+      console.warn('[HeyGen] Failed to auto-save video:', saveErr.message);
+    }
+
+    return { videoUrl, videoId, saved };
 
   } catch (error) {
     console.error('HeyGen API Error:', error);
@@ -70,9 +75,55 @@ export const generatePoster = async ({ topic, platform, size, tone, cta }) => {
 };
 
 /**
+ * Manually fetches a video by ID, and if completed, saves it to Supabase.
+ */
+export const fetchAndSaveVideo = async (videoId) => {
+  try {
+    const statusRes = await axios.get(`${HYGEN_STATUS_URL}?video_id=${videoId}`);
+    const status = statusRes.data?.data?.status;
+    const videoUrl = statusRes.data?.data?.video_url;
+
+    if (status === 'completed' && videoUrl) {
+      // Save to Supabase with placeholder metadata
+      const saved = await saveVideo({
+        video_id: videoId,
+        video_url: videoUrl,
+        topic: 'Manually Fetched Video',
+        platform: 'Manual',
+        tone: 'Manual',
+        cta: ''
+      });
+      return { videoId, videoUrl, saved: true, data: saved };
+    } else if (status === 'failed') {
+      throw new Error(statusRes.data?.data?.error?.message || 'Video generation failed.');
+    } else {
+      throw new Error(`Video is currently: ${status}. Please try again later.`);
+    }
+  } catch (err) {
+    throw new Error(err.response?.data?.error || err.message || 'Failed to fetch video');
+  }
+};
+
+/**
+ * Saves video metadata to Supabase via backend
+ */
+export const saveVideo = async ({ video_id, video_url, topic, platform, tone, cta }) => {
+  const response = await axios.post(VIDEOS_API_URL, {
+    video_id, video_url, topic, platform, tone, cta
+  });
+  return response.data;
+};
+
+/**
+ * Fetches all previously generated videos from Supabase
+ */
+export const getVideos = async () => {
+  const response = await axios.get(VIDEOS_API_URL);
+  return response.data;
+};
+
+/**
  * Maps the size selection to pixel dimensions
- * @param {string} size - e.g., '1:1', '16:9', '4:5'
- * @returns {string} - Pixel dimensions
  */
 const mapSizeToPixels = (size) => {
   switch (size) {

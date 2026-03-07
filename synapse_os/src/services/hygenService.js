@@ -1,76 +1,118 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/apiConfig';
 
-const HYGEN_API_URL = `${API_BASE_URL}/api/hygen/generate`;
+const HYGEN_GENERATE_AND_WAIT_URL = `${API_BASE_URL}/api/hygen/generate-and-wait`;
 const HYGEN_STATUS_URL = `${API_BASE_URL}/api/hygen/status`;
+const GROQ_API_URL = `${API_BASE_URL}/api/hygen/generate-script`;
+const HYGEN_SYNC_URL = `${API_BASE_URL}/api/hygen/sync`;
 const VIDEOS_API_URL = `${API_BASE_URL}/api/videos`;
 
 /**
- * Generates a video using backend HeyGen proxy, then auto-saves to Supabase.
+ * Generates script using Groq
+ */
+export const generateScriptText = async ({ topic, platform, tone, cta }) => {
+  try {
+    const response = await axios.post(GROQ_API_URL, { topic, platform, tone, cta });
+    return response.data.script || '';
+  } catch (error) {
+    console.warn('Failed to auto-generate script:', error);
+    return '';
+  }
+};
+
+/**
+ * Generates a video using the server-side generate-and-wait endpoint.
+ * The server handles all polling and auto-saves to Supabase.
+ * The browser makes ONE request and waits for the final result.
+ *
  * @param {Object} params
+ * @param {Function} params.onProgress - callback(status, percentage) for UI updates
  * @returns {Promise<Object>} - { videoUrl, videoId, saved }
  */
-export const generatePoster = async ({ topic, platform, size, tone, cta }) => {
-  const prompt = `Create a high-quality marketing script for ${topic} in ${tone} style for ${platform}. Include CTA: ${cta ? cta : 'Learn More'}.`;
+export const generatePoster = async ({ scriptText, topic, platform, size, tone, cta, onProgress }) => {
+  let width = 1080;
+  let height = 1920;
+  if (size === '1:1') { width = 1080; height = 1080; }
+  else if (size === '16:9') { width = 1920; height = 1080; }
+  else if (size === '4:5') { width = 1080; height = 1350; }
+
+  const prompt = scriptText || `Create a high-quality marketing script for ${topic} in ${tone} style for ${platform}. Include CTA: ${cta ? cta : 'Learn More'}.`;
+
+  const progress = (status, pct) => {
+    if (typeof onProgress === 'function') onProgress(status, pct);
+  };
+
+  // Start a simulated progress animation while waiting for the server (can take 3–15 min)
+  let simulatedPct = 15;
+  let progressTimer = null;
+
+  const startProgressSimulation = () => {
+    progress('Sending to HeyGen...', 15);
+    progressTimer = setInterval(() => {
+      // Slowly increment progress up to 88% to show activity (server will tell us when done)
+      if (simulatedPct < 88) {
+        simulatedPct = Math.min(simulatedPct + 1, 88);
+        const statusMsg = simulatedPct < 30
+          ? 'Sending to HeyGen...'
+          : simulatedPct < 50
+          ? 'Video queued — HeyGen is rendering...'
+          : simulatedPct < 75
+          ? 'Rendering in progress...'
+          : 'Almost there...';
+        progress(statusMsg, simulatedPct);
+      }
+    }, 10000); // increment every 10 seconds
+  };
+
+  const stopProgressSimulation = () => {
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
+  };
 
   try {
-    // 1. Request Video Generation
+    startProgressSimulation();
+
+    // Single request — server does all the waiting and saves the result
     const response = await axios.post(
-      HYGEN_API_URL,
-      { prompt },
+      HYGEN_GENERATE_AND_WAIT_URL,
+      { scriptText: prompt, topic, platform, tone, cta, width, height },
       {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 60000, 
+        // 16 minute timeout to cover server's 15-minute poll window + buffer
+        timeout: 960000,
       }
     );
 
-    const videoId = response.data?.data?.video_id;
-    if (!videoId) {
-      throw new Error('Failed to start video generation: No video ID returned.');
-    }
+    stopProgressSimulation();
 
-    // 2. Poll for Status
-    let status = 'processing';
-    let videoUrl = null;
-    
-    let attempts = 0;
-    while ((status === 'processing' || status === 'pending') && attempts < 30) {
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      attempts++;
-      
-      const statusRes = await axios.get(`${HYGEN_STATUS_URL}?video_id=${videoId}`);
-      status = statusRes.data?.data?.status;
-      
-      if (status === 'completed') {
-        videoUrl = statusRes.data?.data?.video_url;
-        break;
-      } else if (status === 'failed') {
-        throw new Error(statusRes.data?.data?.error?.message || 'Video generation failed.');
-      }
-    }
+    const { videoUrl, videoId, saved } = response.data;
 
     if (!videoUrl) {
-      throw new Error('Video generation timed out.');
+      throw new Error('No video URL received from server.');
     }
 
-    // 3. Auto-save to Supabase
-    let saved = false;
-    try {
-      await saveVideo({ video_id: videoId, video_url: videoUrl, topic, platform, tone, cta });
-      saved = true;
-      console.log('[HeyGen] Video auto-saved to Supabase');
-    } catch (saveErr) {
-      console.warn('[HeyGen] Failed to auto-save video:', saveErr.message);
-    }
-
+    progress('Video ready!', 100);
     return { videoUrl, videoId, saved };
 
   } catch (error) {
+    stopProgressSimulation();
     console.error('HeyGen API Error:', error);
-    if (error.code === 'ECONNABORTED') {
-      throw new Error('The request timed out. HeyGen API is taking too long to respond.');
+
+    // If timeout due to HeyGen taking too long, provide the videoId if available
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      throw new Error(
+        'Video generation is taking longer than expected. ' +
+        'HeyGen is still processing. Please wait a few minutes and click the Refresh button in the Video Library to check if it has completed.'
+      );
     }
-    throw new Error(error.response?.data?.error || error.message || 'An error occurred while generating the video.');
+
+    const serverError = error.response?.data?.error || error.response?.data?.message;
+    const videoId = error.response?.data?.videoId;
+    let msg = serverError || error.message || 'An error occurred while generating the video.';
+    if (videoId) msg += ` (Video ID: ${videoId} — you can fetch it manually)`;
+    throw new Error(msg);
   }
 };
 
@@ -123,13 +165,9 @@ export const getVideos = async () => {
 };
 
 /**
- * Maps the size selection to pixel dimensions
+ * Syncs videos from HeyGen to Supabase (auto-fetches completed videos not yet saved)
  */
-const mapSizeToPixels = (size) => {
-  switch (size) {
-    case '1:1': return '1080x1080';
-    case '16:9': return '1920x1080';
-    case '4:5': return '1080x1350';
-    default: return '1080x1080';
-  }
+export const syncHeyGenVideos = async () => {
+  const response = await axios.post(HYGEN_SYNC_URL);
+  return response.data;
 };

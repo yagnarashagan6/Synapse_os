@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: synapse-backend
+    env: node
+    plan: free
+    rootDir: server
+    buildCommand: bash render-build.sh
+    startCommand: node index.js
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: APIFY_TOKEN
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: HYGEN_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: HEYGEN_EMAIL
+        sync: false
+      - key: HEYGEN_PASSWORD
+        sync: false

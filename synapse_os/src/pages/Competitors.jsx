@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config/apiConfig';
 import { motion } from 'framer-motion';
-import { Search, Globe, Trash2, ExternalLink, Loader2, AlertCircle, X, MessageCircle, Heart, Calendar, ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Image as ImageIcon, Video, Layers, Zap, Eye } from 'lucide-react';
+import { Search, Globe, Trash2, ExternalLink, Loader2, AlertCircle, X, MessageCircle, Heart, Calendar, ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Image as ImageIcon, Video, Layers, Zap, Eye, Linkedin, Instagram } from 'lucide-react';
+import { usePlatform } from '../context/PlatformContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Table, {
   TableRow,
@@ -46,13 +47,14 @@ function buildSingleChartData(posts) {
   if (!Array.isArray(posts) || posts.length === 0) return [];
   const map = {};
   posts.forEach((post) => {
-    const label = post.timestamp ? postDateLabel(post.timestamp) : null;
+    const ts = post.timestamp || post.publishedAt || post.postedAt || post.time || post.date;
+    const label = ts ? postDateLabel(ts) : null;
     if (!label) return;
-    if (!map[label]) map[label] = { _ts: new Date(post.timestamp), likes: 0, views: 0, comments: 0, _bL: -1, _bV: -1, _bC: -1, likesCap: '', viewsCap: '', commentsCap: '' };
-    const lk = Number(post.likesCount) || 0;
+    if (!map[label]) map[label] = { _ts: new Date(ts), likes: 0, views: 0, comments: 0, _bL: -1, _bV: -1, _bC: -1, likesCap: '', viewsCap: '', commentsCap: '' };
+    const lk = Number(post.likesCount || post.likeCount || post.numLikes) || 0;
     const vw = Number(post.videoViewCount || post.videoPlayCount || post.viewCount) || 0;
-    const cm = Number(post.commentsCount) || 0;
-    const cp = shortText(post.caption || post.title || '');
+    const cm = Number(post.commentsCount || post.commentCount || post.numComments) || 0;
+    const cp = shortText(post.caption || post.title || post.text || '');
     map[label].likes    += lk;
     map[label].views    += vw;
     map[label].comments += cm;
@@ -140,30 +142,33 @@ const CompanyMiniChart = ({ competitor }) => {
     </div>
   );
 };
-// ... (lines 9-206)
 const Competitors = () => {
   const [query, setQuery] = useState('');
   const [competitors, setCompetitors] = useState([]);
+  const { activePlatform } = usePlatform();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   // Modal State
   const [selectedCompetitor, setSelectedCompetitor] = useState(null);
 
-  // Fetch competitors on mount
+  // Fetch competitors on mount or platform change
   useEffect(() => {
     fetchCompetitors();
-  }, []);
+  }, [activePlatform]);
 
   const fetchCompetitors = async () => {
+    setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/competitors`);
+      const response = await fetch(`${API_BASE_URL}/api/competitors?platform=${activePlatform}`);
       if (!response.ok) throw new Error('Failed to fetch competitors');
       const data = await response.json();
       setCompetitors(data);
     } catch (err) {
       console.error(err);
       setError('Could not load competitors. Ensure backend is running.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -178,7 +183,7 @@ const Competitors = () => {
       const response = await fetch(`${API_BASE_URL}/api/competitors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: query }),
+        body: JSON.stringify({ name: query, platform: activePlatform }),
       });
 
       if (!response.ok) {
@@ -201,11 +206,10 @@ const Competitors = () => {
     if (!window.confirm('Are you sure you want to delete this competitor?')) return;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/api/competitors/${id}`, {
-            method: 'DELETE',
-        });
-
-        if (!response.ok) throw new Error('Failed to delete competitor');
+        const response = await fetch(`${API_BASE_URL}/api/competitors/${id}?platform=${activePlatform}`, { method: 'DELETE' });
+        if (!response.ok) {
+          throw new Error('Failed to delete competitor');
+        }
 
         // Remove from local state
         setCompetitors(prev => prev.filter(c => c.id !== id));
@@ -257,9 +261,9 @@ const Competitors = () => {
       // Sorting
       return posts.sort((a, b) => {
           if (sortOption === 'likes') {
-              return (b.likesCount || 0) - (a.likesCount || 0);
+              return (Number(b.likesCount || b.likeCount || b.numLikes) || 0) - (Number(a.likesCount || a.likeCount || a.numLikes) || 0);
           } else if (sortOption === 'comments') {
-              return (b.commentsCount || 0) - (a.commentsCount || 0);
+              return (Number(b.commentsCount || b.commentCount || b.numComments) || 0) - (Number(a.commentsCount || a.commentCount || a.numComments) || 0);
           } else {
               // Default: Newest first
               return new Date(b.timestamp) - new Date(a.timestamp);
@@ -341,9 +345,102 @@ const Competitors = () => {
             {/* Content Display */}
             <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
                 {selectedCompetitor?.scrapedData?.latestPosts ? (
-                    // Instagram Posts View
                     currentPosts.length > 0 ? (
                         <div className="p-0">
+                          {activePlatform === 'linkedin' ? (() => {
+                            // Detect which optional columns have any data across all loaded posts
+                            const hasPreview = currentPosts.some(p => p.displayUrl);
+                            const hasViews   = currentPosts.some(p => p.viewCount != null && Number(p.viewCount) > 0);
+                            const liHeaders  = ['Date', ...(hasPreview ? ['Preview'] : []), 'Type', 'Likes', 'Comments', ...(hasViews ? ['Views'] : []), 'Caption', 'Link'];
+                            return (
+                              <Table headers={liHeaders}>
+                                {currentPosts.map((post, index) => {
+                                  const dateObj   = post.timestamp ? new Date(post.timestamp) : null;
+                                  const validDate = dateObj && !isNaN(dateObj);
+                                  return (
+                                    <TableRow key={index}>
+                                      {/* Date */}
+                                      <TableCell className="whitespace-nowrap">
+                                        {validDate ? (
+                                          <>
+                                            <div className="flex items-center gap-2">
+                                              <Calendar size={14} className="text-muted-foreground" />
+                                              {dateObj.toLocaleDateString()}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground pl-6">
+                                              {dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <span className="text-muted-foreground text-xs">—</span>
+                                        )}
+                                      </TableCell>
+                                      {/* Preview – only rendered when column exists */}
+                                      {hasPreview && (
+                                        <TableCell>
+                                          <PostImage url={getProxyImageUrl(post.displayUrl)} alt="Post preview" />
+                                        </TableCell>
+                                      )}
+                                      {/* Type */}
+                                      <TableCell>
+                                        <div className="flex items-center gap-2 text-muted-foreground">
+                                          {post.type === 'Video'    ? <Video size={18} />        :
+                                           post.type === 'Article'  ? <ExternalLink size={18} /> :
+                                           post.type === 'Carousel' ? <Layers size={18} />       :
+                                           post.type === 'Image'    ? <ImageIcon size={18} />    :
+                                           <MessageCircle size={18} />}
+                                          <span className="text-xs">{post.type || 'Post'}</span>
+                                        </div>
+                                      </TableCell>
+                                      {/* Likes */}
+                                      <TableCell>
+                                        <div className="flex items-center gap-1.5 font-medium text-red-500/90">
+                                          <Heart size={16} className="fill-current" />
+                                          {Number(post.likesCount ?? 0).toLocaleString()}
+                                        </div>
+                                      </TableCell>
+                                      {/* Comments */}
+                                      <TableCell>
+                                        <div className="flex items-center gap-1.5 font-medium text-blue-500/90">
+                                          <MessageCircle size={16} className="fill-current" />
+                                          {Number(post.commentsCount ?? 0).toLocaleString()}
+                                        </div>
+                                      </TableCell>
+                                      {/* Views – only rendered when column exists */}
+                                      {hasViews && (
+                                        <TableCell>
+                                          <div className="flex items-center gap-1.5 font-medium text-green-500/90">
+                                            {post.viewCount != null && Number(post.viewCount) > 0 ? (
+                                              <><Eye size={16} className="fill-current" />{Number(post.viewCount).toLocaleString()}</>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                      )}
+                                      {/* Caption */}
+                                      <TableCell>
+                                        <p className="line-clamp-2 text-sm text-muted-foreground max-w-[300px]" title={post.caption}>
+                                          {post.caption || '—'}
+                                        </p>
+                                      </TableCell>
+                                      {/* Link */}
+                                      <TableCell>
+                                        {post.url ? (
+                                          <a href={post.url} target="_blank" rel="noopener noreferrer"
+                                            className="inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-muted transition-colors text-primary"
+                                            title="View on LinkedIn">
+                                            <ExternalLink size={16} />
+                                          </a>
+                                        ) : <span className="text-muted-foreground text-xs">—</span>}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </Table>
+                            );
+                          })() : (
+                            /* ── Instagram Posts Table (code unchanged) ── */
                             <Table headers={['Date', 'Preview', 'Type', 'Likes', 'Comments', 'Views', 'Caption', 'Link']}>
                                 {currentPosts.map((post, index) => (
                                     <TableRow key={index}>
@@ -373,13 +470,13 @@ const Competitors = () => {
                                         <TableCell>
                                             <div className="flex items-center gap-1.5 font-medium text-red-500/90">
                                                 <Heart size={16} className="fill-current" /> 
-                                                {post.likesCount?.toLocaleString() || 0}
+                                                {Number(post.likesCount || post.likeCount || post.numLikes || 0).toLocaleString()}
                                             </div>
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-1.5 font-medium text-blue-500/90">
                                                 <MessageCircle size={16} className="fill-current" /> 
-                                                {post.commentsCount?.toLocaleString() || 0}
+                                                {Number(post.commentsCount || post.commentCount || post.numComments || 0).toLocaleString()}
                                             </div>
                                         </TableCell>
                                         <TableCell>
@@ -387,7 +484,7 @@ const Competitors = () => {
                                                 { (post.videoViewCount || post.videoPlayCount || post.viewCount) ? (
                                                     <>
                                                         <Eye size={16} className="fill-current" />
-                                                        {(post.videoViewCount || post.videoPlayCount || post.viewCount)?.toLocaleString()}
+                                                        {Number(post.videoViewCount || post.videoPlayCount || post.viewCount).toLocaleString()}
                                                     </>
                                                 ) : (
                                                     <span className="text-muted-foreground">-</span>
@@ -395,8 +492,8 @@ const Competitors = () => {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <p className="line-clamp-2 text-sm text-muted-foreground max-w-[300px]" title={post.caption}>
-                                                {post.caption || "No caption"}
+                                            <p className="line-clamp-2 text-sm text-muted-foreground max-w-[300px]" title={post.caption || post.title || post.text}>
+                                                {post.caption || post.title || post.text || "No caption"}
                                             </p>
                                         </TableCell>
                                         <TableCell>
@@ -413,6 +510,7 @@ const Competitors = () => {
                                     </TableRow>
                                 ))}
                             </Table>
+                          )}
                         </div>
                     ) : (
                         <div className="text-center py-16 text-muted-foreground bg-muted/5">
@@ -511,7 +609,7 @@ const Competitors = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
             <input
               type="text"
-              placeholder="Enter competitor name or Instagram URL (e.g. nike)..."
+              placeholder={`Enter competitor name or ${activePlatform === 'linkedin' ? 'LinkedIn' : 'Instagram'} URL...`}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="w-full bg-background border border-input rounded-lg pl-10 pr-4 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
@@ -547,8 +645,8 @@ const Competitors = () => {
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
             
             <div className="flex justify-between items-start mb-4 relative z-10">
-              <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                <Globe size={24} />
+              <div className={`p-2 rounded-lg ${activePlatform === 'linkedin' ? 'bg-blue-600/10 text-[#0a66c2]' : 'bg-pink-600/10 text-pink-500'}`}>
+                {activePlatform === 'linkedin' ? <Linkedin size={24} /> : <Instagram size={24} />}
               </div>
               <div className="flex flex-col items-end gap-1">
                   <span className="text-xs text-muted-foreground">
@@ -569,29 +667,80 @@ const Competitors = () => {
             </h3>
 
             <div className="text-sm text-muted-foreground mb-4 space-y-2 flex-1 relative z-10">
-               {/* Display Instagram Metrics if available */}
-               {comp.scrapedData && comp.scrapedData.followersCount ? (
+                {/* Display Metrics if available */}
+               {comp.scrapedData && (comp.scrapedData.followersCount || comp.scrapedData.postsCount || comp.scrapedData.latestPosts) ? (
                    <>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="bg-secondary/10 p-2 rounded">
-                            <span className="block font-bold">{comp.scrapedData.followersCount.toLocaleString()}</span>
-                            <span className="text-muted-foreground">Followers</span>
+                        <div className="bg-secondary/10 p-2 rounded flex flex-col items-center">
+                            <span className="block font-bold">{comp.scrapedData.followersCount?.toLocaleString() || 0}</span>
+                            <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Followers</span>
                         </div>
-                        <div className="bg-secondary/10 p-2 rounded">
-                            <span className="block font-bold">{comp.scrapedData.postsCount?.toLocaleString() || 0}</span>
-                            <span className="text-muted-foreground">Posts</span>
+                        <div className="bg-secondary/10 p-2 rounded flex flex-col items-center">
+                            <span className="block font-bold">{(comp.scrapedData.latestPosts?.length || comp.scrapedData.postsCount || 0).toLocaleString()}</span>
+                            <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Posts Analyzed</span>
                         </div>
                     </div>
                     {comp.scrapedData.latestPosts && comp.scrapedData.latestPosts.length > 0 && (
-                        <div className="mt-3">
-                            <p className="text-xs font-semibold mb-1">Latest Post:</p>
-                            <div className="flex gap-4 text-xs">
-                                <span className="flex items-center gap-1"><Heart size={12} className="text-red-500" /> {comp.scrapedData.latestPosts[0].likesCount}</span>
-                                <span className="flex items-center gap-1"><MessageCircle size={12} className="text-blue-500" /> {comp.scrapedData.latestPosts[0].commentsCount}</span>
-                            </div>
-                            <p className="text-[10px] mt-1 text-muted-foreground">
-                                {new Date(comp.scrapedData.latestPosts[0].timestamp).toLocaleDateString()}
-                            </p>
+                        <div className="mt-4 p-3 bg-muted/30 rounded-lg border border-border/50">
+                            {(() => {
+                                const posts = comp.scrapedData.latestPosts;
+                                
+                                // Calculate Totals
+                                const totalLikes = posts.reduce((sum, p) => sum + (Number(p.likesCount || p.likeCount || p.numLikes) || 0), 0);
+                                const totalComments = posts.reduce((sum, p) => sum + (Number(p.commentsCount || p.commentCount || p.numComments) || 0), 0);
+                                const totalViews = posts.reduce((sum, p) => sum + (Number(p.viewCount || p.videoViewCount || p.videoPlayCount) || 0), 0);
+                                
+                                // Calculate Date Range
+                                const timestamps = posts
+                                    .map(p => p.timestamp || p.publishedAt || p.postedAt || p.time || p.date)
+                                    .filter(Boolean)
+                                    .map(ts => new Date(ts).getTime())
+                                    .filter(t => !isNaN(t));
+
+                                let dateRangeStr = "—";
+                                if (timestamps.length > 0) {
+                                    const minDate = new Date(Math.min(...timestamps));
+                                    const maxDate = new Date(Math.max(...timestamps));
+                                    const formatOpts = { month: 'short', day: 'numeric', year: 'numeric' };
+                                    
+                                    if (minDate.toDateString() === maxDate.toDateString()) {
+                                        dateRangeStr = minDate.toLocaleDateString(undefined, formatOpts);
+                                    } else {
+                                        // If different years, show full. Otherwise just Month Day - Month Day, Year
+                                        if (minDate.getFullYear() !== maxDate.getFullYear()) {
+                                            dateRangeStr = `${minDate.toLocaleDateString(undefined, formatOpts)} - ${maxDate.toLocaleDateString(undefined, formatOpts)}`;
+                                        } else {
+                                            dateRangeStr = `${minDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${maxDate.toLocaleDateString(undefined, formatOpts)}`;
+                                        }
+                                    }
+                                }
+
+                                return (
+                                    <>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Aggregate Engagement</p>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2 mb-3">
+                                            <div className="flex flex-col items-center justify-center p-1.5 bg-background rounded border border-border/50">
+                                                <Heart size={14} className="text-red-500 mb-0.5" />
+                                                <span className="font-semibold text-xs">{totalLikes > 9999 ? (totalLikes/1000).toFixed(1) + 'k' : totalLikes.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex flex-col items-center justify-center p-1.5 bg-background rounded border border-border/50">
+                                                <MessageCircle size={14} className="text-blue-500 mb-0.5" />
+                                                <span className="font-semibold text-xs">{totalComments > 9999 ? (totalComments/1000).toFixed(1) + 'k' : totalComments.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex flex-col items-center justify-center p-1.5 bg-background rounded border border-border/50">
+                                                <Eye size={14} className="text-green-500 mb-0.5" />
+                                                <span className="font-semibold text-xs">{totalViews > 9999 ? (totalViews/1000).toFixed(1) + 'k' : totalViews.toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-background px-2 py-1 rounded border border-border/50 w-fit">
+                                            <Calendar size={12} className="text-primary hidden sm:block" />
+                                            <span>{dateRangeStr}</span>
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     )}
                    </>
@@ -600,14 +749,18 @@ const Competitors = () => {
                  <p className="line-clamp-3">
                     {comp.scrapedData && Array.isArray(comp.scrapedData) && comp.scrapedData[0] 
                         ? (comp.scrapedData[0].description || comp.scrapedData[0].title || "No description available.") 
-                        : "No specific Instagram data found."}
+                        : "No specific social data found."}
                  </p>
                )}
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t border-border mt-auto relative z-10">
-                <span className="text-xs bg-secondary/20 text-secondary-foreground px-2 py-1 rounded-full">
-                    {comp.scrapedData?._source ? 'Instagram' : 'Web'}
+                <span className="text-xs bg-secondary/20 text-secondary-foreground px-2 py-1 rounded-full capitalize">
+                    {(() => {
+                        const src = comp.scrapedData?._source || '';
+                        if (src === 'WI0tj4Ieb5Kq458gB') return 'LinkedIn';
+                        return src.replace(/apify\/|harvestapi\//, '').replace('-scraper', '').replace('-profile-posts', '').split('-')[0] || 'Web';
+                    })()}
                 </span>
                 
                 <span className="text-primary text-sm flex items-center gap-1 font-medium">

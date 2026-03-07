@@ -35,7 +35,7 @@ const GenerateButton = ({ onClick, isLoading, disabled }) => {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               ></path>
             </svg>
-            <span>Generating Poster...</span>
+            <span>Generating Video...</span>
           </>
         ) : (
           <>
@@ -52,7 +52,7 @@ const GenerateButton = ({ onClick, isLoading, disabled }) => {
                 d="M13 10V3L4 14h7v7l9-11h-7z"
               />
             </svg>
-            <span>Generate Post Magic</span>
+            <span>Generate Video</span>
           </>
         )}
       </div>

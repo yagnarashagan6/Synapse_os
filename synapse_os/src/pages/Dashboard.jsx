@@ -36,8 +36,8 @@ const PLATFORMS = [
     icon:      Linkedin,
     gradient:  'from-blue-600 to-blue-700',
     textColor: '#0a66c2',
-    available: false,
-    sourceKey: 'linkedin',
+    available: true,
+    sourceKey: 'WI0tj4Ieb5Kq458gB', // matches comp.scrapedData._source for Apify LinkedIn actor
   },
   {
     key:       'tiktok',
@@ -71,9 +71,9 @@ const PLATFORMS = [
 // ─── Metric config ─────────────────────────────────────────────────────────────
 
 const METRIC_CONFIG = {
-  likes:    { label: 'Likes',    icon: Heart,         color: '#f43f5e', field: (p) => Number(p.likesCount) || 0 },
+  likes:    { label: 'Likes',    icon: Heart,         color: '#f43f5e', field: (p) => Number(p.likesCount || p.likeCount || p.numLikes) || 0 },
   views:    { label: 'Views',    icon: Eye,           color: '#22d3ee', field: (p) => Number(p.videoViewCount || p.videoPlayCount || p.viewCount) || 0 },
-  comments: { label: 'Comments', icon: MessageCircle, color: '#a78bfa', field: (p) => Number(p.commentsCount) || 0 },
+  comments: { label: 'Comments', icon: MessageCircle, color: '#a78bfa', field: (p) => Number(p.commentsCount || p.commentCount || p.numComments) || 0 },
 };
 
 const COMPANY_COLORS = [
@@ -118,7 +118,7 @@ function filterByPlatform(competitors, platformKey) {
         source.includes('instagram')
       );
     }
-    return source.includes(platform.sourceKey);
+    return source.includes((platform.sourceKey || '').toLowerCase());
   });
 }
 
@@ -136,8 +136,9 @@ function buildChartData(competitors, metric, startDate, endDate) {
     // Filter posts by date range if provided
     if (start || end) {
       posts = posts.filter((post) => {
-        if (!post.timestamp) return false;
-        const postDate = new Date(post.timestamp);
+        const ts = post.timestamp || post.publishedAt || post.postedAt || post.time || post.date;
+        if (!ts) return false;
+        const postDate = new Date(ts);
         if (start && postDate < start) return false;
         if (end && postDate > end) return false;
         return true;
@@ -145,9 +146,10 @@ function buildChartData(competitors, metric, startDate, endDate) {
     }
 
     posts.forEach((post) => {
-      const label = post.timestamp ? weekBucket(post.timestamp) : null;
+      const ts = post.timestamp || post.publishedAt || post.postedAt || post.time || post.date;
+      const label = ts ? weekBucket(ts) : null;
       if (!label) return;
-      if (!buckets[label]) buckets[label] = { _ts: new Date(post.timestamp) };
+      if (!buckets[label]) buckets[label] = { _ts: new Date(ts) };
       if (!buckets[label][comp.name]) buckets[label][comp.name] = { total: 0, topVal: -1, topCap: '' };
 
       const val = fn(post);
@@ -317,12 +319,12 @@ const CompanyPanel = ({ info, metric, onClose }) => {
 };
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────────
+import { usePlatform } from '../context/PlatformContext';
 
 const Dashboard = () => {
   const { theme } = useTheme();
   const navigate = useNavigate();
-
-  const [activePlatform, setActivePlatform] = useState('instagram');
+  const { activePlatform, setActivePlatform } = usePlatform();
   const [activeMetric,   setActiveMetric]   = useState('likes');
   const [competitors,    setCompetitors]     = useState([]);
   const [loading,        setLoading]         = useState(true);
@@ -343,14 +345,15 @@ const Dashboard = () => {
   // Active platform config
   const currentPlatform = PLATFORMS.find((p) => p.key === activePlatform);
 
-  // Fetch once on mount
+  // Fetch once on mount or when activePlatform changes
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/competitors`)
+    setLoading(true);
+    fetch(`${API_BASE_URL}/api/competitors?platform=${activePlatform}`)
       .then((r) => r.json())
       .then((data) => setCompetitors(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [activePlatform]);
 
   // Filter by platform, then by having latestPosts
   const platformCompetitors = filterByPlatform(competitors, activePlatform);
@@ -360,6 +363,69 @@ const Dashboard = () => {
 
   const chartData = buildChartData(activeCompanies, activeMetric, startDate, endDate);
   const hasData   = chartData.length > 0;
+
+  // ─── Analytics Calculations ───
+  const analytics = React.useMemo(() => {
+    if (!activeCompanies.length) return { momentum: 0, engagement: 0, velocity: 'Low', readiness: 0, topics: [] };
+
+    const getEng = (p) => (Number(p.likesCount || p.likeCount || p.numLikes) || 0) +
+                         (Number(p.commentsCount || p.commentCount || p.numComments) || 0) +
+                         (Number(p.videoViewCount || p.videoPlayCount || p.viewCount) || 0);
+
+    const now = new Date();
+    const periodDays = 30;
+    const currentStart = new Date(now.getTime() - (periodDays * 24 * 60 * 60 * 1000));
+    const previousStart = new Date(now.getTime() - (2 * periodDays * 24 * 60 * 60 * 1000));
+
+    let currentEng = 0;
+    let previousEng = 0;
+    let postCount = 0;
+    const wordFreq = {};
+
+    activeCompanies.forEach(comp => {
+      const posts = comp.scrapedData?.latestPosts || [];
+      posts.forEach(post => {
+        const ts = post.timestamp || post.publishedAt || post.postedAt || post.time || post.date;
+        if (!ts) return;
+        const d = new Date(ts);
+        const eng = getEng(post);
+
+        if (d >= currentStart) {
+          currentEng += eng;
+          postCount++;
+          // Extract topics from captions
+          const words = (post.caption || post.title || "").toLowerCase().split(/\W+/);
+          words.forEach(w => {
+            if (w.length > 4 && !['about', 'there', 'their', 'would', 'could', 'should'].includes(w)) {
+              wordFreq[w] = (wordFreq[w] || 0) + eng;
+            }
+          });
+        } else if (d >= previousStart) {
+          previousEng += eng;
+        }
+      });
+    });
+
+    const momentum = previousEng === 0 ? 100 : Math.round(((currentEng - previousEng) / previousEng) * 100);
+    const velocity = postCount > 20 ? 'High' : postCount > 10 ? 'Medium' : 'Low';
+    
+    // Sort topics by engagement weight
+    const topics = Object.entries(wordFreq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([word, weight]) => ({
+        label: word.charAt(0).toUpperCase() + word.slice(1),
+        count: Math.round(weight / 1000) + 'k'
+      }));
+
+    return { 
+      momentum, 
+      engagement: currentEng, 
+      velocity, 
+      readiness: Math.min(100, Math.round((currentEng / 50000) * 100)), // Mocked logic
+      topics 
+    };
+  }, [activeCompanies]);
 
   // Reset selected line when platform or metric changes
   const handlePlatformChange = (key) => {
@@ -419,10 +485,34 @@ const Dashboard = () => {
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KPICard title="Momentum Score"    value="92"   trend="+12%"       icon={Zap}         trendUp />
-        <KPICard title="Engagement Trend"  value="185k" trend="+24%"       icon={Users}       trendUp />
-        <KPICard title="Topic Velocity"    value="Fast" trend="3 emerging" icon={TrendingUp}  trendUp />
-        <KPICard title="Publish Readiness" value="87%"  trend="5 ready"   icon={CheckCircle} trendUp />
+        <KPICard 
+          title="Momentum Score"    
+          value={analytics.momentum + "%"}   
+          trend={analytics.momentum >= 0 ? "+" + analytics.momentum + "%" : analytics.momentum + "%"}       
+          icon={Zap}         
+          trendUp={analytics.momentum >= 0} 
+        />
+        <KPICard 
+          title="Engagement Trend"  
+          value={analytics.engagement >= 1000 ? (analytics.engagement / 1000).toFixed(1) + "k" : analytics.engagement} 
+          trend={analytics.momentum >= 0 ? "+" + analytics.momentum + "%" : analytics.momentum + "%"}       
+          icon={Users}       
+          trendUp={analytics.momentum >= 0} 
+        />
+        <KPICard 
+          title="Topic Velocity"    
+          value={analytics.velocity}    
+          trend={analytics.topics.length + " emerging"} 
+          icon={TrendingUp}  
+          trendUp 
+        />
+        <KPICard 
+          title="Publish Readiness" 
+          value={analytics.readiness + "%"}  
+          trend="AI Ready"   
+          icon={CheckCircle} 
+          trendUp 
+        />
       </div>
 
       {/* ── Trends Overview ── */}
@@ -590,26 +680,23 @@ const Dashboard = () => {
             <Button variant="ghost" size="icon"><MoreHorizontal size={18} /></Button>
           </div>
           <div className="space-y-3">
-            {[
-              { tone: 'emerald', Icon: TrendingUp, label: 'Sustainable Materials', sub: 'High velocity • 12k mentions', badge: 'Earlier Adopter', variant: 'emerging' },
-              { tone: 'purple',  Icon: Zap,        label: 'AI-Powered Design',    sub: 'Trending • 8.5k mentions',   badge: 'Trending',       variant: 'trending' },
-            ].map(({ tone, Icon, label, sub, badge, variant }) => (
-              <div key={label} className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-border hover:bg-muted transition-colors cursor-pointer">
+            {analytics.topics.length > 0 ? analytics.topics.map((topic, idx) => (
+              <div key={topic.label} className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-border hover:bg-muted transition-colors cursor-pointer">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full bg-${tone}-500/10 flex items-center justify-center text-${tone}-600 dark:text-${tone}-400`}>
-                    <Icon size={20} />
+                  <div className={`w-10 h-10 rounded-full ${['bg-emerald-500/10 text-emerald-600', 'bg-purple-500/10 text-purple-600', 'bg-blue-500/10 text-blue-600'][idx % 3]} flex items-center justify-center`}>
+                    <TrendingUp size={20} />
                   </div>
                   <div>
-                    <h4 className="font-medium text-foreground">{label}</h4>
-                    <p className="text-xs text-muted-foreground">{sub}</p>
+                    <h4 className="font-medium text-foreground">{topic.label}</h4>
+                    <p className="text-xs text-muted-foreground">High velocity • {topic.count} engagement weight</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant={variant}>{badge}</Badge>
+                  <Badge variant={idx === 0 ? 'emerging' : 'trending'}>{idx === 0 ? 'Earlier Adopter' : 'Trending'}</Badge>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate('/poster-generator', { state: { defaultTopic: label } });
+                      navigate('/poster-generator', { state: { defaultTopic: topic.label } });
                     }}
                     className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                     title="Generate Poster"
@@ -618,7 +705,11 @@ const Dashboard = () => {
                   </button>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="text-center py-6 text-muted-foreground text-sm">
+                No emerging topics detected yet.
+              </div>
+            )}
           </div>
         </Card>
 

@@ -15,13 +15,15 @@ const PosterForm = ({
   setTone,
   cta,
   setCta,
+  scriptText,
+  setScriptText,
   onGenerate,
   isLoading
 }) => {
   return (
     <div className="glass-panel rounded-[20px] p-6 lg:p-8 space-y-8 h-full">
       <div className="space-y-2">
-        <h2 className="text-2xl font-bold text-white tracking-tight">Configure Poster</h2>
+        <h2 className="text-2xl font-bold text-white tracking-tight">Configure Video</h2>
         <p className="text-slate-400 text-sm">Fine-tune the AI to generate your perfect marketing asset</p>
       </div>
 
@@ -63,6 +65,21 @@ const PosterForm = ({
             onChange={(e) => setCta(e.target.value)}
             placeholder="e.g. Shop Now, Sign Up Today"
             className="w-full glass-input rounded-xl px-4 py-3 bg-slate-900/60 border-slate-700/50 text-slate-200 focus:border-primary transition-all"
+          />
+        </div>
+
+        {/* Script Text */}
+        <div className="space-y-3">
+          <label htmlFor="script" className="text-sm font-medium text-slate-400">
+            Video Script (Leave empty to auto-generate)
+          </label>
+          <textarea
+            id="script"
+            value={scriptText}
+            onChange={(e) => setScriptText(e.target.value)}
+            placeholder="e.g. Welcome to our new product launch..."
+            rows={4}
+            className="w-full glass-input rounded-xl px-4 py-3 bg-slate-900/60 border-slate-700/50 text-slate-200 focus:border-primary transition-all resize-none"
           />
         </div>
       </div>

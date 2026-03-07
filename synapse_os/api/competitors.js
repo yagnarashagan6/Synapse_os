@@ -18,8 +18,11 @@ export default async function handler(req, res) {
   // ── GET /api/competitors ──
   if (req.method === 'GET') {
     try {
+      const platform = req.query.platform || 'instagram';
+      const tableName = platform === 'linkedin' ? 'linkedin_competitors' : 'competitors';
+
       const { data: competitors, error } = await supabase
-        .from('competitors')
+        .from(tableName)
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -88,15 +91,126 @@ export default async function handler(req, res) {
               scrapedData: newCompetitor.scraped_data,
               createdAt: newCompetitor.created_at,
             });
-          } else {
-            actorId = 'apify/website-content-crawler';
-            runInput = { startUrls: [{ url: name }], maxCrawlDepth: 0, maxPagesPerCrawl: 1 };
+          } else if (name.includes('linkedin.com')) {
+            console.log(`Detected LinkedIn URL: ${name}`);
+            const run = await apifyClient.actor('WI0tj4Ieb5Kq458gB').call({
+                targetUrls: [name],
+                maxPosts: 20,
+                includeQuotePosts: true,
+                includeReposts: true,
+                scrapeReactions: false,
+                maxReactions: 0,
+                scrapeComments: false,
+                maxComments: 0,
+            });
+            const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
+
+            if (items.length === 0) {
+                return res.status(404).json({ error: 'No posts found. Please ensure this is a valid public LinkedIn Company or Profile URL.' });
+            }
+
+            const normalizedPosts = items.map(post => ({
+                ...post,
+                likesCount: post.likeCount ?? post.likes ?? post.like ?? 0,
+                commentsCount: post.commentCount ?? post.comments ?? post.comment ?? 0,
+                viewCount: post.viewCount ?? post.views ?? 0,
+                timestamp: post.postedAt || post.publishedAt || post.timestamp || post.time || post.date,
+                caption: post.text || post.commentary || post.content || post.description || '',
+            }));
+
+            const firstPost = items[0] || {};
+            const authorMeta = firstPost.author || firstPost.company || {};
+            const scrapedData = {
+                latestPosts: normalizedPosts,
+                _source: 'WI0tj4Ieb5Kq458gB',
+                lastUpdated: new Date(),
+                title: authorMeta.name || firstPost.companyName || firstPost.authorName || name,
+                url: name,
+                followersCount: authorMeta.followersCount ?? firstPost.followersCount ?? firstPost.followers ?? 0,
+                postsCount: normalizedPosts.length,
+            };
+
+            const { data, error } = await supabase
+                .from('linkedin_competitors')
+                .insert([{ name, scraped_data: scrapedData }])
+                .select();
+
+            if (error) throw error;
+
+            const newCompetitor = data[0];
+            return res.status(201).json({
+               _id: newCompetitor.id,
+               name: newCompetitor.name,
+               scrapedData: newCompetitor.scraped_data,
+               createdAt: newCompetitor.created_at
+            });
           }
         } else {
           actorId = 'apify/website-content-crawler';
           runInput = { startUrls: [{ url: name }], maxCrawlDepth: 0, maxPagesPerCrawl: 1 };
         }
       } else {
+        const platformName = req.body.platform || 'instagram';
+
+        if (platformName === 'linkedin') {
+            console.log(`Detected Name: ${name} for LinkedIn. Building company URL...`);
+            // Build the exact company URL — NO fallback search
+            const companyUrl = `https://www.linkedin.com/company/${name.toLowerCase().replace(/\s+/g, '-')}`;
+            console.log(`LinkedIn company URL: ${companyUrl}`);
+
+            const run = await apifyClient.actor('WI0tj4Ieb5Kq458gB').call({
+                targetUrls: [companyUrl],
+                maxPosts: 20,
+                includeQuotePosts: true,
+                includeReposts: true,
+                scrapeReactions: false,
+                maxReactions: 0,
+                scrapeComments: false,
+                maxComments: 0,
+            });
+            const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
+
+            if (items.length === 0) {
+                return res.status(404).json({ error: `No posts found for "${name}". Make sure the company name matches the LinkedIn URL slug (e.g. "nike" for linkedin.com/company/nike).` });
+            }
+
+            const normalizedPosts = items.map(post => ({
+                ...post,
+                likesCount: post.likeCount ?? post.likes ?? post.like ?? 0,
+                commentsCount: post.commentCount ?? post.comments ?? post.comment ?? 0,
+                viewCount: post.viewCount ?? post.views ?? 0,
+                timestamp: post.postedAt || post.publishedAt || post.timestamp || post.time || post.date,
+                caption: post.text || post.commentary || post.content || post.description || '',
+            }));
+
+            const firstPost = items[0] || {};
+            const authorMeta = firstPost.author || firstPost.company || {};
+            const scrapedData = {
+                latestPosts: normalizedPosts,
+                _source: 'WI0tj4Ieb5Kq458gB',
+                lastUpdated: new Date(),
+                title: authorMeta.name || firstPost.companyName || firstPost.authorName || name,
+                url: companyUrl,
+                followersCount: authorMeta.followersCount ?? firstPost.followersCount ?? firstPost.followers ?? 0,
+                postsCount: normalizedPosts.length,
+            };
+
+            const { data, error } = await supabase
+                .from('linkedin_competitors')
+                .insert([{ name, scraped_data: scrapedData }])
+                .select();
+
+            if (error) throw error;
+
+            const newCompetitor = data[0];
+            return res.status(201).json({
+                _id: newCompetitor.id,
+                name: newCompetitor.name,
+                scrapedData: newCompetitor.scraped_data,
+                createdAt: newCompetitor.created_at
+            });
+        }
+
         console.log(`Detected Name: ${name}. Starting Dual Scrape...`);
         const profileRun = await apifyClient.actor('apify/instagram-profile-scraper').call({ usernames: [name] });
         const { items: profileItems } = await apifyClient.dataset(profileRun.defaultDatasetId).listItems();
@@ -137,8 +251,11 @@ export default async function handler(req, res) {
       if (run.status === 'FAILED') throw new Error('Run Failed');
 
       const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
+      const platform = req.query.platform || 'instagram';
+      const tableName = platform === 'linkedin' ? 'linkedin_competitors' : 'competitors';
+
       const { data, error } = await supabase
-        .from('competitors')
+        .from(tableName)
         .insert([{
           name,
           scraped_data: items.length > 0 ? { ...items[0], _source: actorId, lastUpdated: new Date() } : {},

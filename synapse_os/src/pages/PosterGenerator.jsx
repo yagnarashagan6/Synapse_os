@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import PosterForm from '../components/poster/PosterForm';
 import PosterPreview from '../components/poster/PosterPreview';
-import { generatePoster, getVideos, fetchAndSaveVideo } from '../services/hygenService';
+import { generatePoster, getVideos, fetchAndSaveVideo, generateScriptText, syncHeyGenVideos } from '../services/hygenService';
 
 const PosterGenerator = ({ defaultTopic: propTopic = '' }) => {
   const location = useLocation();
@@ -14,12 +14,17 @@ const PosterGenerator = ({ defaultTopic: propTopic = '' }) => {
   const [size, setSize] = useState('1:1');
   const [tone, setTone] = useState('Modern');
   const [cta, setCta] = useState('');
+  const [scriptText, setScriptText] = useState('');
   const [posterUrl, setPosterUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [savedVideos, setSavedVideos] = useState([]);
   const [libraryLoading, setLibraryLoading] = useState(true);
+
+  // Generation progress state
+  const [generationStatus, setGenerationStatus] = useState('');
+  const [generationProgress, setGenerationProgress] = useState(0);
 
   // Manual Fetch State
   const [manualVideoId, setManualVideoId] = useState('');
@@ -39,6 +44,12 @@ const PosterGenerator = ({ defaultTopic: propTopic = '' }) => {
   const fetchSavedVideos = async () => {
     try {
       setLibraryLoading(true);
+      // Auto-sync from HeyGen first, then load
+      try {
+        await syncHeyGenVideos();
+      } catch (syncErr) {
+        console.warn('Auto-sync skipped:', syncErr.message);
+      }
       const videos = await getVideos();
       setSavedVideos(videos);
     } catch (err) {
@@ -47,6 +58,11 @@ const PosterGenerator = ({ defaultTopic: propTopic = '' }) => {
       setLibraryLoading(false);
     }
   };
+
+  const handleProgressUpdate = useCallback((status, progress) => {
+    setGenerationStatus(status);
+    setGenerationProgress(progress);
+  }, []);
 
   const handleGenerate = async () => {
     if (!topic.trim()) {
@@ -57,14 +73,34 @@ const PosterGenerator = ({ defaultTopic: propTopic = '' }) => {
     setLoading(true);
     setError(null);
     setSavedToLibrary(false);
+    setGenerationStatus('Generating script...');
+    setGenerationProgress(5);
+    
+    let finalScript = scriptText;
     try {
+      if (!finalScript.trim()) {
+        finalScript = await generateScriptText({ topic, platform, tone, cta });
+        if (finalScript) {
+           setScriptText(finalScript);
+        } else {
+           throw new Error("Failed to auto-generate script.");
+        }
+      }
+
+      setGenerationStatus('Sending to HeyGen...');
+      setGenerationProgress(15);
+
       const result = await generatePoster({
+        scriptText: finalScript,
         topic,
         platform,
         size,
         tone,
-        cta
+        cta,
+        onProgress: handleProgressUpdate
       });
+      setGenerationStatus('Complete!');
+      setGenerationProgress(100);
       setPosterUrl(result.videoUrl);
       setSavedToLibrary(result.saved);
       // Refresh the library
@@ -75,6 +111,8 @@ const PosterGenerator = ({ defaultTopic: propTopic = '' }) => {
       setError(err.message || 'Something went wrong during generation.');
     } finally {
       setLoading(false);
+      setGenerationStatus('');
+      setGenerationProgress(0);
     }
   };
 
@@ -150,9 +188,9 @@ const PosterGenerator = ({ defaultTopic: propTopic = '' }) => {
         </div>
 
         {/* Main Content: Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Config Column */}
-          <div className="lg:col-span-5 h-full">
+          <div className="lg:col-span-5">
             <PosterForm
               topic={topic}
               setTopic={setTopic}
@@ -164,43 +202,49 @@ const PosterGenerator = ({ defaultTopic: propTopic = '' }) => {
               setTone={setTone}
               cta={cta}
               setCta={setCta}
+              scriptText={scriptText}
+              setScriptText={setScriptText}
               onGenerate={handleGenerate}
               isLoading={loading}
             />
-
-            {/* Manual Fetch Block */}
-            <div className="glass-panel rounded-[20px] p-6 mt-6 relative z-20">
-              <h3 className="text-white font-bold mb-2">Have a Video ID?</h3>
-              <p className="text-slate-400 text-xs mb-4">Manually fetch a video that was generated in the background.</p>
-              <div className="flex gap-2 isolate">
-                <input
-                  type="text"
-                  value={manualVideoId}
-                  onChange={(e) => setManualVideoId(e.target.value)}
-                  placeholder="Paste HeyGen Video ID..."
-                  className="flex-1 glass-input min-w-0 rounded-xl px-4 py-2 bg-slate-900/60 border-slate-700/50 text-slate-200 focus:border-primary text-sm transition-all"
-                  disabled={loading}
-                />
-                <button
-                  onClick={handleManualFetch}
-                  disabled={loading || !manualVideoId.trim()}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap"
-                >
-                  {fetchingManual ? 'Fetching...' : 'Fetch'}
-                </button>
-              </div>
-            </div>
           </div>
 
           {/* Preview Column */}
-          <div className="lg:col-span-7 h-full">
+          <div className="lg:col-span-7">
             <PosterPreview
               imageUrl={posterUrl}
               isLoading={loading}
               error={error}
               onRegenerate={handleGenerate}
               savedToLibrary={savedToLibrary}
+              generationStatus={generationStatus}
+              generationProgress={generationProgress}
             />
+          </div>
+        </div>
+
+        {/* Manual Fetch Block — full width, between grid and library */}
+        <div className="glass-panel rounded-[20px] p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="flex-shrink-0">
+            <h3 className="text-white font-bold text-sm">Have a Video ID?</h3>
+            <p className="text-slate-400 text-xs">Fetch a video generated in the background</p>
+          </div>
+          <div className="flex gap-2 flex-1 w-full sm:w-auto">
+            <input
+              type="text"
+              value={manualVideoId}
+              onChange={(e) => setManualVideoId(e.target.value)}
+              placeholder="Paste HeyGen Video ID..."
+              className="flex-1 glass-input min-w-0 rounded-xl px-4 py-2 bg-slate-900/60 border-slate-700/50 text-slate-200 focus:border-primary text-sm transition-all"
+              disabled={loading}
+            />
+            <button
+              onClick={handleManualFetch}
+              disabled={loading || !manualVideoId.trim()}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap"
+            >
+              {fetchingManual ? 'Fetching...' : 'Fetch'}
+            </button>
           </div>
         </div>
 
@@ -245,9 +289,9 @@ const PosterGenerator = ({ defaultTopic: propTopic = '' }) => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {savedVideos.map((video) => (
-                <div key={video.id} className="group rounded-xl bg-slate-900/60 border border-slate-800 hover:border-primary/30 transition-all overflow-hidden">
+                <div key={video.id} className="group rounded-xl bg-slate-900/60 border border-slate-800 hover:border-primary/30 transition-all overflow-hidden min-w-0">
                   {/* Video Thumbnail / Player */}
-                  <div className="relative w-full aspect-video bg-black">
+                  <div className="relative w-full aspect-video bg-black overflow-hidden">
                     <video 
                       src={video.video_url}
                       className="w-full h-full object-cover"
@@ -257,18 +301,18 @@ const PosterGenerator = ({ defaultTopic: propTopic = '' }) => {
                     />
                   </div>
                   {/* Info */}
-                  <div className="p-4 space-y-2">
+                  <div className="p-4 space-y-2 min-w-0">
                     <h3 className="text-white font-semibold text-sm truncate" title={video.topic}>
                       {video.topic || 'Untitled Video'}
                     </h3>
                     <div className="flex items-center gap-2 flex-wrap">
                       {video.platform && (
-                        <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary/10 text-primary border border-primary/20 uppercase">
+                        <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary/10 text-primary border border-primary/20 uppercase truncate max-w-[100px]">
                           {video.platform}
                         </span>
                       )}
                       {video.tone && (
-                        <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-secondary/10 text-secondary border border-secondary/20 uppercase">
+                        <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-secondary/10 text-secondary border border-secondary/20 uppercase truncate max-w-[100px]">
                           {video.tone}
                         </span>
                       )}

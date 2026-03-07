@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -9,11 +10,21 @@ import {
   CheckSquare, 
   Calendar, 
   BarChart2, 
-  ArrowRight 
+  ArrowRight,
+  Video
 } from 'lucide-react';
 
 const AITools = () => {
+  const navigate = useNavigate();
   const tools = [
+    { 
+        icon: Video, 
+        title: 'HeyGen Video Generator', 
+        description: 'Create high-quality AI videos with lifelike avatars and natural voices.', 
+        status: 'New', 
+        color: 'from-purple-600 to-pink-600',
+        path: '/heygen-creator'
+    },
     { 
         icon: Zap, 
         title: 'Trend Scanner', 
@@ -84,7 +95,10 @@ const AITools = () => {
                     {tool.description}
                 </p>
                 
-                <Button className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 group-hover:border-purple-500/30 text-slate-300 group-hover:text-white justify-between px-4">
+                <Button 
+                    onClick={() => tool.path && navigate(tool.path)}
+                    className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 group-hover:border-purple-500/30 text-slate-300 group-hover:text-white justify-between px-4"
+                >
                     Launch Module <ArrowRight size={16} />
                 </Button>
             </Card>

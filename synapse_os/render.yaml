@@ -3,7 +3,7 @@ services:
     name: synapse-backend
     env: node
     plan: free
-    rootDir: server
+    rootDir: synapse_os/server
     buildCommand: bash render-build.sh
     startCommand: node index.js
     envVars:

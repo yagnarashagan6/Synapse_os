@@ -1311,7 +1311,7 @@ app.post("/api/hygen/sync", async (req, res) => {
 
 // POST /api/videos - Save generated video metadata to Supabase
 app.post("/api/videos", async (req, res) => {
-  const { video_id, video_url, topic, platform, tone, cta } = req.body;
+  const { video_id, video_url, topic, platform, ratio, tone, cta } = req.body;
 
   if (!video_id || !video_url) {
     return res
@@ -1328,9 +1328,10 @@ app.post("/api/videos", async (req, res) => {
           video_url,
           topic,
           platform,
+          ratio,
           tone,
           cta,
-          status: "completed",
+          status: "new",
         },
       ])
       .select();
@@ -1359,6 +1360,40 @@ app.get("/api/videos", async (req, res) => {
   } catch (error) {
     console.error("Error fetching videos:", error);
     res.status(500).json({ error: "Failed to fetch videos" });
+  }
+});
+
+// PATCH /api/videos/:id - Update video metadata (status, topic, etc.)
+app.patch("/api/videos/:id", async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from("generated_videos")
+      .update(updates)
+      .eq("id", id)
+      .select();
+
+    if (error) throw error;
+    res.json(data[0]);
+  } catch (error) {
+    console.error("Error updating video:", error);
+    res.status(500).json({ error: "Failed to update video" });
+  }
+});
+
+// DELETE /api/videos/:id - Delete a video from Supabase
+app.delete("/api/videos/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const { error } = await supabase.from("generated_videos").delete().eq("id", id);
+    if (error) throw error;
+    res.json({ message: "Video deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting video:", error);
+    res.status(500).json({ error: "Failed to delete video" });
   }
 });
 

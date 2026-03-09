@@ -10,44 +10,61 @@ import {
   Twitter, 
   Linkedin, 
   Clock, 
-  User 
+  User,
+  Video,
+  Play
 } from 'lucide-react';
+import { getVideos } from '../services/hygenService';
+import { useEffect } from 'react';
 
 const Approvals = () => {
-  const [selectedItem, setSelectedItem] = useState(0);
+  const [selectedItemIdx, setSelectedItemIdx] = useState(0);
+  const [videos, setVideos] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const approvalItems = [
-    { 
-      id: 0, 
-      title: 'Sustainable Tech Unboxing', 
-      platform: 'TikTok', 
-      author: 'Sarah J.', 
-      status: 'Ready', 
-      date: 'Oct 28', 
-      content: 'Hey guys! Checking out the new EcoPhone today. The packaging is 100% biodegradable and look at this texture! 🌱 #EcoTech #Sustainability #Unboxing',
-      image: 'https://images.unsplash.com/photo-1542601906990-b4d3fb7d5fa5?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
-    },
-    { 
-      id: 1, 
-      title: 'Q3 Market Analysis', 
-      platform: 'LinkedIn', 
-      author: 'Mike R.', 
-      status: 'Pending', 
-      date: 'Oct 30', 
-      content: 'Our Q3 analysis shows a 40% increase in renewable energy adoption. Read the full report below. 📈 #MarketTrends #RenewableEnergy',
-      image: null
-    },
-    { 
-        id: 2, 
-        title: 'Design Tips Carousel', 
-        platform: 'Instagram', 
-        author: 'Jessica L.', 
-        status: 'Revision', 
-        date: 'Nov 02', 
-        content: 'Swipe left for 5 tips to improve your UI design workflow! 🎨 #DesignTips #UIUX',
-        image: 'https://images.unsplash.com/photo-1586717791821-3f44a5638d4f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
-    }
-  ];
+  useEffect(() => {
+    const fetchVideos = async () => {
+      try {
+        const data = await getVideos();
+        // Convert video data to approval item format
+        // Only show videos that have been marked as 'approved' in the content container
+        const formatted = (data || [])
+          .filter(v => v.status === 'approved')
+          .map(v => ({
+            id: v.id,
+          title: v.topic || "AI Content Piece",
+          platform: v.platform || "Social Media",
+          author: "HeyGen AI",
+          status: "Ready",
+          date: new Date(v.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+          content: `AI Generated Video for ${v.topic}. Status: Completed.`,
+          video_url: v.video_url,
+          is_video: true
+        }));
+        
+        // Combine with existing defaults if any, but prioritize videos
+        setVideos(formatted.length > 0 ? formatted : [
+          { 
+            id: 'd1', 
+            title: 'Sustainable Tech Unboxing', 
+            platform: 'TikTok', 
+            author: 'Sarah J.', 
+            status: 'Ready', 
+            date: 'Oct 28', 
+            content: 'Hey guys! Checking out the new EcoPhone today. The packaging is 100% biodegradable and look at this texture! 🌱 #EcoTech #Sustainability #Unboxing',
+            image: 'https://images.unsplash.com/photo-1542601906990-b4d3fb7d5fa5?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
+          }
+        ]);
+      } catch (err) {
+        console.error("Failed to fetch approvals:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchVideos();
+  }, []);
+
+  const selectedItem = videos[selectedItemIdx] || null;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-140px)]">
@@ -55,21 +72,24 @@ const Approvals = () => {
       <Card className="flex flex-col h-full">
         <h2 className="text-xl font-bold text-white mb-4">Approval Queue</h2>
         <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-          {approvalItems.map((item, idx) => (
+          {loading ? (
+             [1,2,3].map(i => <div key={i} className="h-24 bg-slate-800/30 rounded-xl animate-pulse" />)
+          ) : videos.map((item, idx) => (
             <div 
               key={item.id} 
-              onClick={() => setSelectedItem(idx)}
-              className={`p-4 rounded-xl border cursor-pointer transition-all ${selectedItem === idx ? 'bg-purple-500/10 border-purple-500/50' : 'bg-slate-800/30 border-slate-700/50 hover:bg-slate-700/30'}`}
+              onClick={() => setSelectedItemIdx(idx)}
+              className={`p-4 rounded-xl border cursor-pointer transition-all ${selectedItemIdx === idx ? 'bg-purple-500/10 border-purple-500/50' : 'bg-slate-800/30 border-slate-700/50 hover:bg-slate-700/30'}`}
             >
               <div className="flex items-center justify-between mb-2">
                 <Badge variant={item.status === 'Ready' ? 'success' : item.status === 'Revision' ? 'warning' : 'default'}>
                     {item.status}
                 </Badge>
+                {item.is_video && <Video size={14} className="text-purple-400" />}
                 <div className="text-xs text-slate-400 flex items-center gap-1">
                     <Clock size={12} /> {item.date}
                 </div>
               </div>
-              <h3 className="font-medium text-slate-200 mb-1">{item.title}</h3>
+              <h3 className="font-medium text-slate-200 mb-1 line-clamp-1">{item.title}</h3>
               <p className="text-xs text-slate-500 flex items-center gap-2">
                 <User size={12} /> {item.author} • {item.platform}
               </p>
@@ -86,10 +106,16 @@ const Approvals = () => {
                      <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
                         <User size={20} className="text-slate-400" />
                      </div>
-                     <div>
-                        <h3 className="font-bold text-white text-lg">{approvalItems[selectedItem].title}</h3>
-                        <p className="text-sm text-slate-400">Created by {approvalItems[selectedItem].author} • {approvalItems[selectedItem].platform}</p>
-                     </div>
+                     {selectedItem ? (
+                       <div>
+                        <h3 className="font-bold text-white text-lg">{selectedItem.title}</h3>
+                        <p className="text-sm text-slate-400">Created by {selectedItem.author} • {selectedItem.platform}</p>
+                       </div>
+                     ) : (
+                       <div>
+                        <h3 className="font-bold text-white text-lg">No Item Selected</h3>
+                       </div>
+                     )}
                 </div>
                 <div className="flex gap-2">
                     <Button variant="ghost" size="icon"><AlertCircle size={20} /></Button>
@@ -97,21 +123,26 @@ const Approvals = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto mb-6 custom-scrollbar">
-                <div className="bg-black/20 rounded-xl p-6 border border-slate-800/50 max-w-2xl mx-auto">
-                    {approvalItems[selectedItem].image && (
-                         <div className="aspect-video bg-slate-800 rounded-lg mb-4 overflow-hidden">
-                             <img src={approvalItems[selectedItem].image} alt="Preview" className="w-full h-full object-cover" />
-                         </div>
-                    )}
-                    <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">
-                        {approvalItems[selectedItem].content}
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                        <span className="text-purple-400 text-sm">#EcoTech</span>
-                        <span className="text-purple-400 text-sm">#Sustainability</span>
-                        <span className="text-purple-400 text-sm">#Unboxing</span>
-                    </div>
-                </div>
+                {selectedItem && (
+                  <div className="bg-black/20 rounded-xl p-6 border border-slate-800/50 max-w-2xl mx-auto">
+                      {selectedItem.is_video ? (
+                        <div className="aspect-video bg-black rounded-xl mb-6 overflow-hidden border border-slate-700 shadow-2xl relative group">
+                           <video 
+                              src={selectedItem.video_url} 
+                              controls 
+                              className="w-full h-full object-contain"
+                           />
+                        </div>
+                      ) : selectedItem.image && (
+                           <div className="aspect-video bg-slate-800 rounded-lg mb-4 overflow-hidden">
+                               <img src={selectedItem.image} alt="Preview" className="w-full h-full object-cover" />
+                           </div>
+                      )}
+                      <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">
+                          {selectedItem.content}
+                      </p>
+                  </div>
+                )}
             </div>
 
             <div className="pt-4 border-t border-slate-700/50 flex items-center justify-end gap-3">

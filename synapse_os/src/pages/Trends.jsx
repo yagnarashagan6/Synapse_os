@@ -299,7 +299,7 @@ const Trends = () => {
                   <Button
                     variant="ghost" 
                     size="sm"
-                    onClick={() => navigate('/poster-generator', { state: { defaultTopic: topic.topic } })}
+                    onClick={() => navigate('/heygen-creator', { state: { defaultTopic: topic.topic } })}
                     className="hover:bg-primary/20 text-primary p-2"
                     title="Generate Poster"
                   >

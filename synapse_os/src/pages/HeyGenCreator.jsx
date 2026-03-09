@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import axios from "axios";
 import { API_BASE_URL } from "../config/apiConfig";
 import {
@@ -18,8 +19,14 @@ import {
   SlidersHorizontal,
   RefreshCw,
   ExternalLink,
+  Instagram,
+  Linkedin,
+  Youtube,
+  Twitter,
+  Music2,
 } from "lucide-react";
 import { HEYGEN_AVATARS, HEYGEN_VOICES } from "../config/heygenData";
+import { saveVideo } from "../services/hygenService";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const LANGUAGES = [
@@ -51,6 +58,14 @@ const BG_PRESETS = [
   { label: "Gradient Blue", value: "#0f3460" },
   { label: "Soft Purple", value: "#4a1a6b" },
   { label: "Forest Green", value: "#1a3d2b" },
+];
+
+const PLATFORMS_DATA = [
+  { id: "instagram", label: "Instagram", icon: Instagram, ratios: ["1:1", "4:5", "9:16"] },
+  { id: "linkedin", label: "LinkedIn", icon: Linkedin, ratios: ["16:9", "1:1"] },
+  { id: "tiktok", label: "TikTok", icon: Music2, ratios: ["9:16"] },
+  { id: "youtube", label: "YouTube", icon: Youtube, ratios: ["16:9", "9:16"] },
+  { id: "twitter", label: "Twitter", icon: Twitter, ratios: ["16:9", "1:1"] },
 ];
 
 // ─── AvatarCard ──────────────────────────────────────────────────────────────
@@ -246,6 +261,7 @@ export default function HeyGenCreator() {
   const [voiceSearch, setVoiceSearch] = useState("");
   const [voiceGender, setVoiceGender] = useState("All");
   const [voiceLang, setVoiceLang] = useState("English");
+  const [selectedPlatform, setSelectedPlatform] = useState(PLATFORMS_DATA[0]);
 
   // Selections
   const [selectedAvatar, setSelectedAvatar] = useState(null);
@@ -270,6 +286,16 @@ export default function HeyGenCreator() {
 
   // Active tab
   const [activeTab, setActiveTab] = useState("avatars"); // 'avatars' | 'voices' | 'settings'
+
+  // Handle incoming topic from navigation state
+  const location = useLocation();
+  useEffect(() => {
+    if (location.state?.defaultTopic) {
+      setTopic(location.state.defaultTopic);
+      // Optional: automatically generate script if topic is provided
+      // generateScript(); // We might not want to auto-run this immediately to allow user to tweak
+    }
+  }, [location.state]);
 
   // Set default selections
   useEffect(() => {
@@ -304,6 +330,12 @@ export default function HeyGenCreator() {
     return matchSearch && matchGender && matchLang;
   });
 
+  // Filtered sizes based on platform
+  const filteredSizes = SIZES.filter((s) => {
+    const ratioLabel = s.label.split(" ")[0];
+    return selectedPlatform.ratios.includes(ratioLabel);
+  });
+
   // Auto-generate script
   const generateScript = async () => {
     if (!topic.trim()) return;
@@ -313,7 +345,7 @@ export default function HeyGenCreator() {
         `${API_BASE_URL}/api/hygen/generate-script`,
         {
           topic,
-          platform: "Social Media",
+          platform: selectedPlatform.label,
           tone: "Professional",
           cta: "Learn More",
         },
@@ -394,6 +426,22 @@ export default function HeyGenCreator() {
       const videoUrl = await pollStatus(videoId);
       setGeneratedVideoUrl(videoUrl);
       setGenerationStatus("Done!");
+
+      // AUTO-SAVE to Supabase
+      try {
+        await saveVideo({
+          video_id: videoId,
+          video_url: videoUrl,
+          topic: topic || "Synapse AI Video",
+          platform: selectedPlatform.label,
+          ratio: selectedSize.label.split(" ")[0],
+          tone: "Professional",
+          cta: "",
+        });
+        console.log("Video saved to Supabase successfully.");
+      } catch (saveErr) {
+        console.warn("Failed to auto-save to Supabase:", saveErr.message);
+      }
     } catch (err) {
       setGenError(
         err.response?.data?.message ||
@@ -430,6 +478,33 @@ export default function HeyGenCreator() {
               Select an avatar & voice, then generate your AI video
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* Platform Selection Chips */}
+      <div className="mb-6 overflow-x-auto no-scrollbar pb-2">
+        <label className="block text-xs font-medium text-gray-500 uppercase tracking-widest mb-3">
+          Select Target Platform
+        </label>
+        <div className="flex items-center gap-3 w-max">
+          {PLATFORMS_DATA.map((p) => {
+            const Icon = p.icon;
+            const isActive = selectedPlatform.id === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setSelectedPlatform(p)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 transition-all duration-200 ${
+                  isActive
+                    ? "bg-purple-600/20 border-purple-500 text-purple-200 shadow-[0_0_15px_rgba(168,85,247,0.2)]"
+                    : "bg-white/5 border-white/10 text-gray-400 hover:border-white/30 hover:bg-white/10"
+                }`}
+              >
+                <Icon size={18} />
+                <span className="font-semibold text-sm">{p.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -696,7 +771,7 @@ export default function HeyGenCreator() {
                   Video Dimensions
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {SIZES.map((s) => (
+                  {filteredSizes.map((s) => (
                     <button
                       key={s.label}
                       onClick={() => setSelectedSize(s)}

@@ -149,10 +149,26 @@ export const fetchAndSaveVideo = async (videoId) => {
 /**
  * Saves video metadata to Supabase via backend
  */
-export const saveVideo = async ({ video_id, video_url, topic, platform, tone, cta }) => {
+export const saveVideo = async ({ video_id, video_url, topic, platform, ratio, tone, cta }) => {
   const response = await axios.post(VIDEOS_API_URL, {
-    video_id, video_url, topic, platform, tone, cta
+    video_id, video_url, topic, platform, ratio, tone, cta
   });
+  return response.data;
+};
+
+/**
+ * Updates video metadata in Supabase via backend
+ */
+export const updateVideo = async (id, updates) => {
+  const response = await axios.patch(`${VIDEOS_API_URL}/${id}`, updates);
+  return response.data;
+};
+
+/**
+ * Deletes a video from Supabase via backend
+ */
+export const deleteVideo = async (id) => {
+  const response = await axios.delete(`${VIDEOS_API_URL}/${id}`);
   return response.data;
 };
 

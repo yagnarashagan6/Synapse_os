@@ -16,7 +16,7 @@ import Sources from "./pages/Sources";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Competitors from "./pages/Competitors";
-import PosterGenerator from "./pages/PosterGenerator";
+
 import HeyGenCreator from "./pages/HeyGenCreator";
 import { ThemeProvider } from "./context/ThemeContext"; // Assuming this exists or similar globally
 import { PlatformProvider } from "./context/PlatformContext";
@@ -37,7 +37,7 @@ function App() {
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<Settings />} />
             <Route path="competitors" element={<Competitors />} />
-            <Route path="poster-generator" element={<PosterGenerator />} />
+
             <Route path="heygen-creator" element={<HeyGenCreator />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

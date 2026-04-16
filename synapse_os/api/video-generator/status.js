@@ -11,24 +11,24 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const hygenApiKey = process.env.HYGEN_API_KEY;
+  const video-generatorApiKey = process.env.video-generator_API_KEY;
   const videoId = req.query.video_id;
 
-  if (!hygenApiKey || !videoId) {
+  if (!video-generatorApiKey || !videoId) {
     return res.status(400).json({ error: 'Missing API key or video_id' });
   }
 
   try {
     const response = await axios.get(
-      `https://api.heygen.com/v1/video_status.get?video_id=${videoId}`,
+      `https://api.Video Generator.com/v1/video_status.get?video_id=${videoId}`,
       {
-        headers: { 'X-Api-Key': hygenApiKey },
+        headers: { 'X-Api-Key': video-generatorApiKey },
         timeout: 10000,
       }
     );
     return res.status(response.status).json(response.data);
   } catch (error) {
-    console.error('HeyGen status error:', error.response?.data || error.message);
+    console.error('Video Generator status error:', error.response?.data || error.message);
     return res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed' });
   }
 }

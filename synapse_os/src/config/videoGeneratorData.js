@@ -1,4 +1,4 @@
-export const HEYGEN_AVATARS = [
+export const VIDEO_GENERATOR_AVATARS = [
   {
     "avatar_id": "Abigail_expressive_2024112501",
     "avatar_name": "Abigail (Upper Body)",
@@ -141,7 +141,7 @@ export const HEYGEN_AVATARS = [
   }
 ];
 
-export const HEYGEN_VOICES = [
+export const VIDEO_GENERATOR_VOICES = [
   {
     "voice_id": "f38a635bee7a4d1f9b0a654a31d050d2",
     "language": "English",

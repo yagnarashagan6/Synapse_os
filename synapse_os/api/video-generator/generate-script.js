@@ -11,26 +11,26 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { topic, platform, tone, cta } = req.body;
-  const groqApiKey = process.env.GROQ_API_KEY;
+  const { topic, platform, tone, cta, language } = req.body;
+  const openaiApiKey = process.env.OPENAI_API_KEY;
 
-  if (!groqApiKey) {
-    return res.status(500).json({ error: 'Groq API key is not configured.' });
+  if (!openaiApiKey) {
+    return res.status(500).json({ error: 'OpenAI API key is not configured.' });
   }
 
   try {
-    const prompt = `Write a short, engaging video script (around 30-40 seconds spoken, keep it conversational and natural) about "${topic}" for "${platform}" in a "${tone}" tone. The script must end with a Call to Action: "${cta || 'Learn More'}". Provide ONLY the exact words to be spoken by an AI avatar. Do not include camera directions, brackets, speaker labels, emojis, or any other meta-text. Just the raw spoken script.`;
+    const prompt = `Write a short, engaging video script (around 30-40 seconds spoken, keep it conversational and natural) about "${topic}" for "${platform}" in a "${tone}" tone. The script must end with a Call to Action: "${cta || 'Learn More'}". The script MUST be written in the following language: ${language || 'English'}. Provide ONLY the exact words to be spoken by an AI avatar. Do not include camera directions, brackets, speaker labels, emojis, or any other meta-text. Just the raw spoken script.`;
 
     const response = await axios.post(
-      'https://api.groq.com/openai/v1/chat/completions',
+      'https://api.openai.com/v1/chat/completions',
       {
-        model: "llama-3.1-8b-instant",
+        model: "gpt-4o-mini",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
       },
       {
         headers: {
-          'Authorization': `Bearer ${groqApiKey}`,
+          'Authorization': `Bearer ${openaiApiKey}`,
           'Content-Type': 'application/json',
         }
       }
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ script: scriptText });
   } catch (error) {
-    console.error('Groq generation error:', error.response?.data || error.message);
+    console.error('OpenAI generation error:', error.response?.data || error.message);
     return res.status(500).json({ error: 'Failed to generate script' });
   }
 }

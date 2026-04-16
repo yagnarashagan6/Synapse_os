@@ -19,33 +19,46 @@ import {
   Minus
 } from 'lucide-react';
 import Button from '../components/ui/Button';
-import { getVideos, deleteVideo, updateVideo } from '../services/hygenService';
+import { getVideos, deleteVideo, updateVideo, syncVideoGeneratorVideos } from '../services/videoGeneratorService';
 import { useEffect } from 'react';
 
 const PlatformIcon = ({ platform }) => {
-  switch (platform) {
+  switch (platform?.toLowerCase()) {
     case 'instagram': return <Instagram size={16} className="text-pink-500" />;
     case 'youtube': return <Youtube size={16} className="text-red-500" />;
     case 'linkedin': return <Linkedin size={16} className="text-blue-500" />;
-    case 'twitter': return <Twitter size={16} className="text-sky-500" />;
+    case 'twitter': 
+    case 'x':
+      return <Twitter size={16} className="text-sky-500" />;
     case 'tiktok': return <Music2 size={16} className="text-white" />;
-    default: return null;
+    default: return <Video size={16} className="text-slate-400" />;
   }
 };
 
-
+let globalVideosCache = null;
+let hasSyncedThisSession = false;
 
 const Content = () => {
     const navigate = useNavigate();
 
     // State for tasks
-    const [tasks, setTasks] = useState([
-        { id: 1, title: 'Top 5 AI Tools for Designers', description: 'Carousel post showcasing new AI design tools.', platform: 'instagram', status: 'new', date: 'Oct 24' },
-        { id: 2, title: 'Future of Education Trends', description: 'Deep dive video script regarding EduGen analysis.', platform: 'youtube', status: 'in-progress', date: 'Oct 25' },
-        { id: 3, title: 'Remote Work Productivity Hacks', description: 'Thread exploring efficient remote work setups.', platform: 'twitter', status: 'in-progress', date: 'Oct 26' },
-        { id: 4, title: 'Sustainable Tech Unboxing', description: 'Short-form video for eco-friendly gadgets.', platform: 'tiktok', status: 'approved', date: 'Oct 28' },
-        { id: 5, title: 'Synapse OS Feature Launch', description: 'Official press release and professional update.', platform: 'linkedin', status: 'approved', date: 'Oct 30' },
-    ]);
+    const [tasks, setTasks] = useState(() => {
+        const saved = localStorage.getItem('synapse_content_tasks');
+        if (saved) {
+            try { return JSON.parse(saved); } catch (e) { console.error(e); }
+        }
+        return [
+            { id: 1, title: 'Top 5 AI Tools for Designers', description: 'Carousel post showcasing new AI design tools.', platform: 'instagram', status: 'new', date: 'Oct 24' },
+            { id: 2, title: 'Future of Education Trends', description: 'Deep dive video script regarding EduGen analysis.', platform: 'youtube', status: 'in-progress', date: 'Oct 25' },
+            { id: 3, title: 'Remote Work Productivity Hacks', description: 'Thread exploring efficient remote work setups.', platform: 'twitter', status: 'in-progress', date: 'Oct 26' },
+            { id: 4, title: 'Sustainable Tech Unboxing', description: 'Short-form video for eco-friendly gadgets.', platform: 'tiktok', status: 'approved', date: 'Oct 28' },
+            { id: 5, title: 'Synapse OS Feature Launch', description: 'Official press release and professional update.', platform: 'linkedin', status: 'approved', date: 'Oct 30' },
+        ];
+    });
+
+    useEffect(() => {
+        localStorage.setItem('synapse_content_tasks', JSON.stringify(tasks));
+    }, [tasks]);
 
     // State for Edit Modal
     const [editingTask, setEditingTask] = useState(null);
@@ -56,33 +69,56 @@ const Content = () => {
     const approvedTasks = tasks.filter(t => t.status === 'approved');
     const rejectedTasks = tasks.filter(t => t.status === 'rejected');
 
-    const [videos, setVideos] = useState([]);
-    const [loadingVideos, setLoadingVideos] = useState(true);
+    const [videos, setVideos] = useState(globalVideosCache || []);
+    const [loadingVideos, setLoadingVideos] = useState(!globalVideosCache);
 
     useEffect(() => {
-        fetchVideos();
+        fetchVideos(!hasSyncedThisSession);
     }, []);
 
-    const fetchVideos = async () => {
-        setLoadingVideos(true);
-        try {
-            const data = await getVideos();
-            setVideos(data || []);
-        } catch (err) {
-            console.error("Failed to fetch videos:", err);
-        } finally {
+    const fetchVideos = (forceSync = false) => {
+        if (!globalVideosCache) setLoadingVideos(true);
+        // 1. Fetch from DB immediately to show UI quickly
+        getVideos().then(data => {
+            const activeVideos = (data || []).filter(v => v.status !== 'deleted');
+            globalVideosCache = activeVideos;
+            setVideos(activeVideos);
             setLoadingVideos(false);
+        }).catch(err => {
+            console.error("Failed to fetch videos:", err);
+            setLoadingVideos(false);
+        });
+
+        if (forceSync && !hasSyncedThisSession) {
+            hasSyncedThisSession = true;
+            // 2. Sync from Video Generator in background, then refresh
+            syncVideoGeneratorVideos().then(() => {
+                getVideos().then(data => {
+                    const activeVideos = (data || []).filter(v => v.status !== 'deleted');
+                    globalVideosCache = activeVideos;
+                    setVideos(activeVideos);
+                });
+            }).catch(syncErr => {
+                console.warn("Video Generator sync failed, continuing:", syncErr);
+            });
         }
     };
 
     const handleDeleteVideo = async (id, skipConfirm = false) => {
         if (!skipConfirm && !window.confirm("Are you sure you want to delete this video?")) return;
         try {
-            await deleteVideo(id);
-            setVideos(prev => prev.filter(v => v.id !== id));
+            // Optimistic deletion
+            const updateFn = prev => prev.filter(v => v.id !== id);
+            setVideos(updateFn);
+            if (globalVideosCache) globalVideosCache = updateFn(globalVideosCache);
+            // Soft delete so the sync script doesn't reincarnate it
+            await updateVideo(id, { status: 'deleted' });
+            // Also explicitly issue a delete request in case the backend natively supports it or for future proofing
+            try { await deleteVideo(id); } catch (ignore) {}
         } catch (err) {
             console.error("Failed to delete video:", err);
             alert("Failed to delete video. Please check console.");
+            fetchVideos(false); // rollback
         }
     };
 
@@ -92,16 +128,19 @@ const Content = () => {
 
     const handleUpdateVideoStatus = async (id, newStatus) => {
         try {
+            // Optimistic update
+            const updateFn = prev => prev.map(v => v.id === id ? { ...v, status: newStatus } : v);
+            setVideos(updateFn);
+            if (globalVideosCache) globalVideosCache = updateFn(globalVideosCache);
             await updateVideo(id, { status: newStatus });
-            // Refresh list
-            fetchVideos();
         } catch (err) {
             console.error("Failed to update video status:", err);
+            fetchVideos(false); // rollback
         }
     };
 
     const handleCreateContent = () => {
-        navigate('/heygen-creator');
+        navigate('/video-generator');
     };
 
     const handleCardClick = (task) => {
@@ -208,10 +247,10 @@ const Content = () => {
                     onClick={(e) => e.stopPropagation()}
                     className="w-4 h-4 rounded border-slate-600 bg-slate-700 checked:bg-purple-500 focus:ring-purple-500 cursor-pointer"
                 />
-                <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-700">
-                    <PlatformIcon platform={item.platform} />
+                <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center">
+                    <PlatformIcon platform={(item.platform || '').toLowerCase()} />
                 </div>
-                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{item.platform}</span>
+                <span className="text-xs font-medium text-slate-400 capitalize tracking-wider">{item.platform || 'General'}</span>
             </div>
             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 p-0 text-slate-500">
                 <MoreHorizontal size={14} />
@@ -222,9 +261,16 @@ const Content = () => {
         <p className="text-xs text-slate-500 mb-4 line-clamp-2">{item.description}</p>
         
         <div className="flex items-center justify-between pt-3 border-t border-slate-700/50">
-            <div className="flex items-center gap-2 text-slate-400">
-                <CalendarIcon size={14} />
-                <span className="text-xs">{item.date}</span>
+            <div className="flex items-center gap-3 text-slate-400">
+                <div className="flex items-center gap-1">
+                    <CalendarIcon size={12} />
+                    <span className="text-[10px]">{item.date}</span>
+                </div>
+                {item.ratio && (
+                    <div className="px-1.5 py-0.5 rounded bg-slate-700/50 border border-slate-600 text-[9px] font-bold text-slate-300">
+                        {item.ratio}
+                    </div>
+                )}
             </div>
             <div className="flex -space-x-2">
                  <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-[10px] text-white ring-2 ring-slate-800">
@@ -268,16 +314,31 @@ const Content = () => {
 
     const VideoCard = ({ video }) => {
       const [showMenu, setShowMenu] = useState(false);
+      const isGif = video.video_url?.toLowerCase().includes('.gif') || video.video_url?.toLowerCase().includes('.webp') || video.video_url?.toLowerCase().includes('/gif/');
+      
       return (
       <div className="w-[320px] bg-slate-800/80 backdrop-blur-md border border-purple-500/30 rounded-2xl overflow-hidden group hover:border-purple-500 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)] transition-all flex-shrink-0 relative">
         <div className="aspect-video relative bg-black">
-          <video 
-            src={video.video_url} 
-            className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-            controls
-            muted
-          />
-          <div className="absolute top-3 right-3 flex gap-2 z-10 pointer-events-none">
+          {isGif ? (
+            <img 
+              src={video.video_url} 
+              alt={video.topic}
+              className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity relative z-20"
+            />
+          ) : (
+            <video 
+              src={video.video_url ? `${video.video_url}#t=0.001` : ''} 
+              className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity relative z-20 cursor-pointer"
+              controls
+              playsInline
+              preload="metadata"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.target.paused ? e.target.play().catch(console.error) : e.target.pause();
+              }}
+            />
+          )}
+          <div className="absolute top-3 right-3 flex gap-2 z-30 pointer-events-none">
             <div className="bg-purple-600 text-white p-2.5 rounded-lg shadow-lg">
               <Video size={16} />
             </div>
@@ -285,9 +346,16 @@ const Content = () => {
         </div>
         <div className="p-4 relative">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <PlatformIcon platform={(video.platform || '').toLowerCase()} />
-              <Badge variant="info" className="text-[10px] uppercase font-bold">{video.ratio || 'N/A'}</Badge>
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 rounded-lg bg-emerald-950/30 border border-emerald-500/20 flex items-center gap-1.5">
+                  <PlatformIcon platform={(video.platform || '').toLowerCase()} />
+                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">{video.platform || 'General'}</span>
+              </div>
+              {video.ratio && (
+                  <div className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-400">
+                      {video.ratio}
+                  </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-slate-500">{new Date(video.created_at).toLocaleDateString()}</span>
@@ -304,18 +372,20 @@ const Content = () => {
           <h4 className="font-bold text-slate-200 text-sm line-clamp-1 mb-4">{video.topic || 'Untitled Creation'}</h4>
           
           <div className="flex flex-col gap-2 relative z-20">
-            {['new', 'in-progress', 'approved', 'rejected'].includes(video.status) ? (
+            {['new', 'in-progress', 'approved', 'rejected', 'in-approvals'].includes(video.status) ? (
               <div className="w-full flex items-center justify-between bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2 text-xs text-slate-300">
                 <span className="flex items-center gap-2 font-medium">
                   <div className={`w-2 h-2 rounded-full ${
                     video.status === 'new' ? 'bg-indigo-500' :
                     video.status === 'in-progress' ? 'bg-cyan-500' :
                     video.status === 'approved' ? 'bg-emerald-500' :
+                    video.status === 'in-approvals' ? 'bg-purple-500' :
                     'bg-red-500'
                   }`} />
                   {video.status === 'new' ? 'New Idea' :
                    video.status === 'in-progress' ? 'In Progress' :
-                   video.status === 'approved' ? 'Approved' : 'Rejected'}
+                   video.status === 'approved' ? 'Approved' : 
+                   video.status === 'in-approvals' ? 'In Approvals' : 'Rejected'}
                 </span>
                 <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">In Workflow</span>
               </div>
@@ -400,22 +470,34 @@ const Content = () => {
                     )}
                 </div>
                 <div className="p-3 border-t border-slate-800/50">
-                    <select 
-                        className="w-full bg-slate-900 border border-slate-700 hover:border-purple-500 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-500 transition-colors cursor-pointer appearance-none text-center font-medium shadow-sm"
-                        value=""
-                        onChange={(e) => handleBulkMove(itemsToMove, e.target.value)}
-                    >
-                        <option value="" disabled>&#8644; Move {hasSelection ? `${selectedInColumn.length} Selected` : 'All'} To...</option>
-                        <option value="new" disabled={status === 'new'}>New Ideas</option>
-                        <option value="in-progress" disabled={status === 'in-progress'}>In Progress</option>
-                        <option value="approved" disabled={status === 'approved'}>Approved</option>
-                        <option value="rejected" disabled={status === 'rejected'}>Rejected</option>
-                        {status === 'rejected' && <option value="delete" className="text-red-400">Delete Permanently</option>}
-                    </select>
+                    {status === 'approved' ? (
+                        <button
+                            onClick={() => handleBulkMove(itemsToMove, 'in-approvals')}
+                            title="Move items to the Approvals container"
+                            className="w-full bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-lg px-3 py-2 text-xs transition-colors font-medium text-center shadow-sm"
+                        >
+                            &#8644; Move {hasSelection ? `${selectedInColumn.length} Selected` : 'All'} to Approvals
+                        </button>
+                    ) : (
+                        <select 
+                            className="w-full bg-slate-900 border border-slate-700 hover:border-purple-500 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-500 transition-colors cursor-pointer appearance-none text-center font-medium shadow-sm"
+                            value=""
+                            onChange={(e) => handleBulkMove(itemsToMove, e.target.value)}
+                        >
+                            <option value="" disabled>&#8644; Move {hasSelection ? `${selectedInColumn.length} Selected` : 'All'} To...</option>
+                            <option value="new" disabled={status === 'new'}>New Ideas</option>
+                            <option value="in-progress" disabled={status === 'in-progress'}>In Progress</option>
+                            <option value="approved" disabled={status === 'approved'}>Approved</option>
+                            <option value="rejected" disabled={status === 'rejected'}>Rejected</option>
+                            {status === 'rejected' && <option value="delete" className="text-red-400">Delete Permanently</option>}
+                        </select>
+                    )}
                 </div>
             </div>
         );
     };
+
+    const uncategorizedVideos = videos.filter(v => !['new', 'in-progress', 'approved', 'rejected', 'in-approvals'].includes(v.status));
 
   return (
     <div className="h-full flex flex-col relative">
@@ -427,18 +509,18 @@ const Content = () => {
           {/* Removed redundant Create Content button that pointed to /poster-generator */}
        </div>
 
-       {/* New Video Generations Section (Queue) - Shows all generated videos */}
-       {videos.length > 0 && (
+       {/* New Video Generations Section (Queue) - Shows all generated videos that are unassigned */}
+       {uncategorizedVideos.length > 0 && (
        <div className="mb-10">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 rounded-xl bg-purple-500/20 border border-purple-500/30 text-purple-400">
               <ClockIcon size={20} />
             </div>
-            <h3 className="text-xl font-bold text-white">Uncategorized Generations</h3>
+            <h3 className="text-xl font-bold text-white">Created Videos ({uncategorizedVideos.length})</h3>
           </div>
           
           <div className="flex gap-6 overflow-x-auto pb-4 custom-scrollbar">
-            {videos.map(video => (
+            {uncategorizedVideos.map(video => (
                 <VideoCard key={video.id} video={video} />
             ))}
           </div>

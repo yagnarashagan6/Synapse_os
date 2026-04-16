@@ -16,14 +16,17 @@ import Sources from "./pages/Sources";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Competitors from "./pages/Competitors";
+import KnowledgeBase from "./pages/KnowledgeBase";
 
-import HeyGenCreator from "./pages/HeyGenCreator";
+import VideoGenerator from "./pages/VideoGenerator";
 import { ThemeProvider } from "./context/ThemeContext"; // Assuming this exists or similar globally
 import { PlatformProvider } from "./context/PlatformContext";
+import { Toaster } from "react-hot-toast";
 
 function App() {
   return (
     <PlatformProvider>
+      <Toaster position="top-right" />
       <Router>
         <Routes>
           <Route path="/" element={<MainLayout />}>
@@ -34,11 +37,12 @@ function App() {
             <Route path="approvals" element={<Approvals />} />
             <Route path="ai-tools" element={<AITools />} />
             <Route path="sources" element={<Sources />} />
+            <Route path="knowledge-base" element={<KnowledgeBase />} />
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<Settings />} />
             <Route path="competitors" element={<Competitors />} />
 
-            <Route path="heygen-creator" element={<HeyGenCreator />} />
+            <Route path="video-generator" element={<VideoGenerator />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

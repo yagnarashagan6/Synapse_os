@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   Video,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -25,8 +26,9 @@ const Sidebar = ({ isOpen, onClose }) => {
     { icon: CheckCircle, label: "Approvals", path: "/approvals" },
     { icon: Bot, label: "AI Tools", path: "/ai-tools" },
     { icon: Database, label: "Sources", path: "/sources" },
+    { icon: BookOpen, label: "Knowledge Base", path: "/knowledge-base" },
     { icon: Bot, label: "Competitors", path: "/competitors" },
-    { icon: Video, label: "HeyGen Creator", path: "/heygen-creator" },
+    { icon: Video, label: "Video Generator", path: "/video-generator" },
   ];
 
   const bottomItems = [

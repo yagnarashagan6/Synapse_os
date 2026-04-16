@@ -32,6 +32,17 @@ const PostImage = ({ url, alt }) => {
 };
 
 
+// ─── Display name helper ────────────────────────────────────────────────────────
+function getDisplayName(name) {
+  if (!name) return 'Unknown';
+  // Extract @handle from Instagram/social URLs
+  const match = name.match(/(?:instagram\.com|twitter\.com|x\.com|tiktok\.com|linkedin\.com\/in)\/([^/?]+)/);
+  if (match) return '@' + match[1];
+  // If already a handle
+  if (name.startsWith('@')) return name;
+  return name;
+}
+
 // ─── chart helpers ─────────────────────────────────────────────────────────────
 function shortText(str, words) {
   if (!str) return '';
@@ -107,7 +118,7 @@ const CompanyMiniChart = ({ competitor }) => {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <h3 className="font-semibold text-foreground">Engagement Analytics</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">{competitor.name} &middot; {posts.length} posts &middot; hover for top caption</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{getDisplayName(competitor.name)} &middot; {posts.length} posts &middot; hover for top caption</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {CHART_LINES.map(({ key, color, label }) => (
@@ -297,7 +308,7 @@ const Competitors = () => {
                     <ArrowLeft size={24} />
                 </button>
                 <div>
-                    <h1 className="text-3xl font-bold">{selectedCompetitor.name}</h1>
+                    <h1 className="text-3xl font-bold">{getDisplayName(selectedCompetitor.name)}</h1>
                     <p className="text-muted-foreground">Detailed Post Analysis</p>
                 </div>
             </div>
@@ -634,14 +645,21 @@ const Competitors = () => {
 
       {/* Competitors List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {competitors.map((comp) => (
+        {competitors.map((comp) => {
+          const isOwn = comp.isPrimary === true;
+          return (
           <motion.div
             key={comp.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-card border border-border rounded-xl p-5 hover:shadow-md transition-all cursor-pointer group flex flex-col h-full relative overflow-hidden"
+            className={`bg-card border ${isOwn ? 'border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.15)] bg-purple-500/5' : 'border-border'} rounded-xl p-5 hover:shadow-md transition-all cursor-pointer group flex flex-col h-full relative overflow-hidden ring-1 ring-transparent hover:ring-primary/20`}
             onClick={() => viewPosts(comp)}
           >
+            {isOwn && (
+              <div className="absolute top-0 right-0 bg-purple-500 text-white text-[10px] uppercase font-bold px-3 py-1 rounded-bl-lg shadow-sm z-20">
+                Our Company
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
             
             <div className="flex justify-between items-start mb-4 relative z-10">
@@ -663,7 +681,7 @@ const Competitors = () => {
             </div>
             
             <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors relative z-10">
-              {comp.name}
+              {getDisplayName(comp.name)}
             </h3>
 
             <div className="text-sm text-muted-foreground mb-4 space-y-2 flex-1 relative z-10">
@@ -768,7 +786,8 @@ const Competitors = () => {
                 </span>
             </div>
           </motion.div>
-        ))}
+          );
+        })}
         
         {competitors.length === 0 && !loading && (
             <div className="col-span-full text-center py-12 text-muted-foreground">

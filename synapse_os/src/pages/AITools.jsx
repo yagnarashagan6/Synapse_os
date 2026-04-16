@@ -19,11 +19,11 @@ const AITools = () => {
   const tools = [
     { 
         icon: Video, 
-        title: 'HeyGen Video Generator', 
+        title: 'Video Generator', 
         description: 'Create high-quality AI videos with lifelike avatars and natural voices.', 
         status: 'New', 
         color: 'from-purple-600 to-pink-600',
-        path: '/heygen-creator'
+        path: '/video-generator'
     },
     { 
         icon: Zap, 

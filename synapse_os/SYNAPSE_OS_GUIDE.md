@@ -21,11 +21,11 @@ This document provides a one-line description of every file in the Synapse OS co
 - `api/competitors.js`: Serverless handler for fetching and scraping competitor data.
 - `api/competitors/[id].js`: Serverless handler for operations on a specific competitor (e.g., delete).
 - `api/proxy-image.js`: Serverless handler to proxy images (e.g., from Instagram) to avoid CORS issues.
-- `api/hygen/generate.js`: Serverless handler to trigger video generation via the HeyGen API.
-- `api/hygen/status.js`: Serverless handler to check the status of a HeyGen video generation request.
+- `api/video-generator/generate.js`: Serverless handler to trigger video generation via the Video Generator API.
+- `api/video-generator/status.js`: Serverless handler to check the status of a Video Generator video generation request.
 
 ### `server` Directory (Local Express Server)
-- `server/.env`: Environment variables for the backend server (Supabase, Apify, HeyGen keys).
+- `server/.env`: Environment variables for the backend server (Supabase, Apify, Video Generator keys).
 - `server/index.js`: Main entry point for the local Express server, handling API routes and middleware.
 - `server/migrate.js`: Script to migrate data (e.g., from MongoDB to Supabase).
 - `server/package.json`: Backend project manifest with dependencies and scripts.
@@ -93,7 +93,7 @@ Synapse OS is a full-stack application designed for marketing automation and com
 
 ### 3. Backend Processing & Integrations
 - **Data Scraping**: When a user adds a competitor, the backend uses the **Apify Client** to trigger actors (like `instagram-scraper`) that gather social media data.
-- **Video Generation**: The `PosterGenerator` and related tools call the **HeyGen API** via the backend proxy to create AI-generated video content.
+- **Video Generation**: The `PosterGenerator` and related tools call the **Video Generator API** via the backend proxy to create AI-generated video content.
 - **Image Proxying**: To bypass CORS restrictions when displaying external images (like Instagram profile pictures), the backend provides a `/api/proxy-image` endpoint.
 
 ### 4. Data Storage (Supabase)
@@ -101,4 +101,4 @@ Synapse OS is a full-stack application designed for marketing automation and com
 - The backend uses the `@supabase/supabase-js` client to perform CRUD operations on tables like `competitors` and `generated_videos`.
 
 ### 5. Automation & Webhooks
-- The system can receive updates from external services (like HeyGen) via **webhooks** (`api/hygen/webhook`), which then update the status of tasks in the Supabase database.
+- The system can receive updates from external services (like Video Generator) via **webhooks** (`api/video-generator/webhook`), which then update the status of tasks in the Supabase database.

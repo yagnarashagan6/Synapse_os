@@ -15,15 +15,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const hygenApiKey = (process.env.HYGEN_API_KEY || "").trim();
-  if (!hygenApiKey) {
+  const video-generatorApiKey = (process.env.video-generator_API_KEY || "").trim();
+  if (!video-generatorApiKey) {
     return res
       .status(500)
-      .json({ error: "HeyGen API key is not configured on the server." });
+      .json({ error: "Video Generator API key is not configured on the server." });
   }
 
   try {
-    // Trim script to HeyGen's 15-second limit (~35 words max)
+    // Trim script to Video Generator's 15-second limit (~35 words max)
     const rawScript =
       req.body.scriptText ||
       req.body.prompt ||
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     const pitch = parseFloat(req.body.pitch) || 0;
 
     const response = await axios.post(
-      "https://api.heygen.com/v2/video/generate",
+      "https://api.Video Generator.com/v2/video/generate",
       {
         title: req.body.topic || "Synapse Video",
         video_inputs: [
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
       },
       {
         headers: {
-          "x-api-key": hygenApiKey, // correct header name (lowercase)
+          "x-api-key": video-generatorApiKey, // correct header name (lowercase)
           "Content-Type": "application/json",
         },
         timeout: 60000,
@@ -81,10 +81,10 @@ export default async function handler(req, res) {
 
     return res.status(response.status).json(response.data);
   } catch (error) {
-    console.error("HeyGen proxy error:", error.response?.data || error.message);
+    console.error("Video Generator proxy error:", error.response?.data || error.message);
     const statusCode = error.response?.status || 500;
     const errorMessage = error.response?.data || {
-      error: "Failed to generate video via HeyGen API",
+      error: "Failed to generate video via Video Generator API",
     };
     return res.status(statusCode).json(errorMessage);
   }

@@ -1,0 +1,10 @@
+{
+  "message": "Request failed with status code 400",
+  "response_data": {
+    "detail": {
+      "status": "upload_file_size_exceeded",
+      "message": "A uploaded file is too large, please upload files with a maximum of 11MB."
+    }
+  },
+  "response_status": 400
+}

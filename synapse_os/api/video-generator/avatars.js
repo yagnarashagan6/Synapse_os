@@ -10,26 +10,26 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const apiKey = (process.env.HYGEN_API_KEY || "").trim();
+  const apiKey = (process.env.video-generator_API_KEY || "").trim();
   if (!apiKey) {
     return res
       .status(500)
-      .json({ error: "HeyGen API key is not configured on the server." });
+      .json({ error: "Video Generator API key is not configured on the server." });
   }
 
   try {
-    const response = await axios.get("https://api.heygen.com/v2/voices", {
+    const response = await axios.get("https://api.Video Generator.com/v2/avatars", {
       headers: { "x-api-key": apiKey },
       timeout: 30000,
     });
     return res.status(200).json(response.data);
   } catch (error) {
     console.error(
-      "HeyGen voices error:",
+      "Video Generator avatars error:",
       error.response?.data || error.message,
     );
     return res
       .status(error.response?.status || 500)
-      .json(error.response?.data || { error: "Failed to fetch voices" });
+      .json(error.response?.data || { error: "Failed to fetch avatars" });
   }
 }

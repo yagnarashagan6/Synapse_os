@@ -1,15 +1,15 @@
 const puppeteer = require('puppeteer');
 
 /**
- * Automates logging into HeyGen and clicking the 'Submit' button on the most recent draft video.
+ * Automates logging into Video Generator and clicking the 'Submit' button on the most recent draft video.
  * Assumes the draft was already created by the API.
  */
-async function triggerHeyGenDraftRender(email, password, maxRetries = 3) {
+async function triggerVideoGeneratorDraftRender(email, password, maxRetries = 3) {
     if (!email || !password) {
-        throw new Error('Missing HeyGen credentials in environment variables.');
+        throw new Error('Missing Video Generator credentials in environment variables.');
     }
 
-    console.log('[Puppeteer] Starting HeyGen draft automation...');
+    console.log('[Puppeteer] Starting Video Generator draft automation...');
     let browser;
     try {
         browser = await puppeteer.launch({
@@ -22,7 +22,7 @@ async function triggerHeyGenDraftRender(email, password, maxRetries = 3) {
         
         // 1. Go to Login Page
         console.log('[Puppeteer] Navigating to login...');
-        await page.goto('https://app.heygen.com/login', { waitUntil: 'networkidle2' });
+        await page.goto('https://app.Video Generator.com/login', { waitUntil: 'networkidle2' });
         
         // 2. Fill Credentials
         console.log('[Puppeteer] Typing credentials...');
@@ -77,15 +77,15 @@ async function triggerHeyGenDraftRender(email, password, maxRetries = 3) {
         
         // Wait for the video library to load
         // This selector targets a video card that specifically has an "Edit" button or "Draft" label
-        // HeyGen often uses generic classes, so we might need to look for specific text
+        // Video Generator often uses generic classes, so we might need to look for specific text
         
         // Wait a few seconds for data to load
         await new Promise(r => setTimeout(r, 5000));
         
         // Find the top-most draft video and click its 'Edit' button
-        // Since HeyGen is heavily React-based, we look for buttons containing "Edit" or similar.
+        // Since Video Generator is heavily React-based, we look for buttons containing "Edit" or similar.
         
-        // NOTE: This specific logic is fragile and heavily depends on HeyGen's DOM.
+        // NOTE: This specific logic is fragile and heavily depends on Video Generator's DOM.
         // We will try an approach that looks for links containing 'editor' or buttons containing 'Edit'
         
         const editClicked = await page.evaluate(() => {
@@ -157,10 +157,10 @@ async function triggerHeyGenDraftRender(email, password, maxRetries = 3) {
         if (browser) await browser.close();
         if (maxRetries > 0) {
             console.log(`[Puppeteer] Retrying... (${maxRetries} left)`);
-            return triggerHeyGenDraftRender(email, password, maxRetries - 1);
+            return triggerVideoGeneratorDraftRender(email, password, maxRetries - 1);
         }
         throw error;
     }
 }
 
-module.exports = { triggerHeyGenDraftRender };
+module.exports = { triggerVideoGeneratorDraftRender };

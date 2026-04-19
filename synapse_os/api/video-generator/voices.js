@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const apiKey = (process.env.video-generator_API_KEY || "").trim();
+  const apiKey = (process.env.VIDEO_GENERATOR_API_KEY || "").trim();
   if (!apiKey) {
     return res
       .status(500)
@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await axios.get("https://api.Video Generator.com/v2/voices", {
+    const response = await axios.get("https://api.heygen.com/v2/voices", {
       headers: { "x-api-key": apiKey },
       timeout: 30000,
     });

@@ -5,6 +5,7 @@ const cors = require("cors");
 const { createClient } = require("@supabase/supabase-js");
 const { ApifyClient } = require("apify-client");
 const axios = require("axios");
+axios.defaults.family = 4;
 const swaggerJsdoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
 const multer = require("multer");

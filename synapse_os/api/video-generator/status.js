@@ -11,18 +11,18 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const video-generatorApiKey = process.env.video-generator_API_KEY;
+  const videoGeneratorApiKey = process.env.VIDEO_GENERATOR_API_KEY;
   const videoId = req.query.video_id;
 
-  if (!video-generatorApiKey || !videoId) {
+  if (!videoGeneratorApiKey || !videoId) {
     return res.status(400).json({ error: 'Missing API key or video_id' });
   }
 
   try {
     const response = await axios.get(
-      `https://api.Video Generator.com/v1/video_status.get?video_id=${videoId}`,
+      `https://api.heygen.com/v1/video_status.get?video_id=${videoId}`,
       {
-        headers: { 'X-Api-Key': video-generatorApiKey },
+        headers: { 'X-Api-Key': videoGeneratorApiKey },
         timeout: 10000,
       }
     );

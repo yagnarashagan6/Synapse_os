@@ -15,8 +15,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const video-generatorApiKey = (process.env.video-generator_API_KEY || "").trim();
-  if (!video-generatorApiKey) {
+  const videoGeneratorApiKey = (process.env.VIDEO_GENERATOR_API_KEY || "").trim();
+  if (!videoGeneratorApiKey) {
     return res
       .status(500)
       .json({ error: "Video Generator API key is not configured on the server." });
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     const words = rawScript.trim().split(/\s+/);
     const scriptText =
       words.length > 35 ? words.slice(0, 35).join(" ") + "." : rawScript.trim();
-
+ 
     // Use caller-supplied IDs or fall back to defaults
     const avatarId = (req.body.avatar_id || DEFAULT_AVATAR_ID).trim();
     const voiceId = (req.body.voice_id || DEFAULT_VOICE_ID).trim();
@@ -39,9 +39,9 @@ export default async function handler(req, res) {
     const bgColor = req.body.background_color || "#f5f5f5";
     const speed = parseFloat(req.body.speed) || 1.0;
     const pitch = parseFloat(req.body.pitch) || 0;
-
+ 
     const response = await axios.post(
-      "https://api.Video Generator.com/v2/video/generate",
+      "https://api.heygen.com/v2/video/generate",
       {
         title: req.body.topic || "Synapse Video",
         video_inputs: [
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
       },
       {
         headers: {
-          "x-api-key": video-generatorApiKey, // correct header name (lowercase)
+          "x-api-key": videoGeneratorApiKey, // correct header name (lowercase)
           "Content-Type": "application/json",
         },
         timeout: 60000,

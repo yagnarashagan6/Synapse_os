@@ -31,6 +31,7 @@ import {
   ArrowRight,
   ExternalLink,
   Shield,
+  Bot
 } from "lucide-react";
 
 // ─── Helper: format file size ────────────────────────────────────────────────
@@ -288,6 +289,19 @@ const KnowledgeBase = () => {
   const [isAddingLink, setIsAddingLink] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const fileInputRef = useRef(null);
+  const chatScrollRef = useRef(null);
+  
+  // Chatbot states
+  const [chatQuery, setChatQuery] = useState("");
+  const [chatMessages, setChatMessages] = useState([]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+
+  // Auto-scroll chat to bottom on new messages
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages, isChatLoading]);
 
   // ─── Fetch items ───────────────────────────────────────────────────────────
   const fetchItems = useCallback(async () => {
@@ -315,10 +329,22 @@ const KnowledgeBase = () => {
   // ─── Upload file ───────────────────────────────────────────────────────────
   const handleUpload = async (files) => {
     if (!files || files.length === 0) return;
+
+    // Filter for PDFs
+    const validFiles = Array.from(files).filter(
+      (f) => f.name.toLowerCase().endsWith(".pdf") || f.type === "application/pdf"
+    );
+
+    if (validFiles.length === 0) {
+      alert("Only PDF files are supported");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     setIsUploading(true);
 
     try {
-      for (const file of files) {
+      for (const file of validFiles) {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("file_type", "document");
@@ -337,6 +363,9 @@ const KnowledgeBase = () => {
       console.error("Upload failed:", err);
     } finally {
       setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -391,6 +420,37 @@ const KnowledgeBase = () => {
     e.preventDefault();
     setIsDragging(false);
     handleUpload(e.dataTransfer.files);
+  };
+
+  // ─── Chatbot handler ───────────────────────────────────────────────────────
+  const handleChatSubmit = async (e) => {
+    e.preventDefault();
+    if (!chatQuery.trim() || isChatLoading) return;
+    
+    const userMsg = { role: "user", content: chatQuery };
+    setChatMessages((prev) => [...prev, userMsg]);
+    setChatQuery("");
+    setIsChatLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/knowledge-base/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMsg.content }),
+      });
+      const data = await res.json();
+      
+      if (data.error) {
+        setChatMessages((prev) => [...prev, { role: "system", content: "Error: " + data.error }]);
+      } else {
+        setChatMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      }
+    } catch (err) {
+      console.error("Chat error:", err);
+      setChatMessages((prev) => [...prev, { role: "system", content: "Connection error." }]);
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
   // ─── Filter items by tab ───────────────────────────────────────────────────
@@ -510,8 +570,9 @@ const KnowledgeBase = () => {
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.gif,.webp"
+            accept=".pdf"
             className="hidden"
+            onClick={(e) => e.stopPropagation()}
             onChange={(e) => handleUpload(e.target.files)}
           />
 
@@ -551,7 +612,7 @@ const KnowledgeBase = () => {
                   </span>
                 </p>
                 <p className="text-xs text-slate-500 mt-1.5">
-                  Support for PDF, DOC, TXT, MD, and image files
+                  Support for PDF files
                 </p>
               </div>
             </div>
@@ -563,7 +624,7 @@ const KnowledgeBase = () => {
           <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">
             Supported:
           </span>
-          {["PDF", "DOCX", "TXT", "MD", "URLs", "Images"].map((fmt) => (
+          {["PDF", "URLs"].map((fmt) => (
             <span
               key={fmt}
               className="px-2 py-0.5 rounded-md bg-slate-800/60 border border-slate-700/50 text-[10px] text-slate-400 font-medium"
@@ -815,6 +876,72 @@ const KnowledgeBase = () => {
           </div>
         </div>
       </div>
+
+      {/* ═══ KNOWLEDGE BASE CHATBOT ═══ */}
+      <Card className="relative overflow-hidden border-cyan-500/30">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500 to-transparent" />
+        
+        <div className="p-4 border-b border-slate-700/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
+              <MessageSquare size={20} className="text-cyan-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Test Knowledge RAG</h3>
+              <p className="text-xs text-slate-400">Ask questions to verify AI is fetching from your documents.</p>
+            </div>
+          </div>
+          <Badge color="cyan" text="Testing Tool" icon={Zap} />
+        </div>
+
+        <div ref={chatScrollRef} className="h-64 overflow-y-auto p-4 space-y-4 bg-slate-900/50">
+          {chatMessages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-slate-500">
+              <Bot size={32} className="mb-2 opacity-50" />
+              <p className="text-sm">No messages yet.</p>
+              <p className="text-xs mt-1">Ask something based on the uploaded PDFs!</p>
+            </div>
+          ) : (
+            chatMessages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
+                  msg.role === "user" 
+                    ? "bg-purple-600 text-white rounded-br-none" 
+                    : msg.role === "system"
+                    ? "bg-red-500/20 border border-red-500/30 text-red-300 rounded-bl-none"
+                    : "bg-slate-800 border border-slate-700 text-slate-200 rounded-bl-none"
+                }`}>
+                  {msg.content}
+                </div>
+              </div>
+            ))
+          )}
+          {isChatLoading && (
+            <div className="flex justify-start">
+              <div className="bg-slate-800 border border-slate-700 px-4 py-3 rounded-2xl rounded-bl-none flex items-center gap-2">
+                <Loader2 size={14} className="text-cyan-400 animate-spin" />
+                <span className="text-xs text-slate-400">Thinking...</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 bg-slate-800/30 border-t border-slate-700/50">
+          <form onSubmit={handleChatSubmit} className="flex items-center gap-3">
+            <input
+              type="text"
+              value={chatQuery}
+              onChange={(e) => setChatQuery(e.target.value)}
+              placeholder="Ask anything about your documents..."
+              className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none text-sm"
+              disabled={isChatLoading}
+            />
+            <Button type="submit" variant="primary" disabled={isChatLoading || !chatQuery.trim()}>
+              Send
+            </Button>
+          </form>
+        </div>
+      </Card>
 
       {/* ═══ LINK MODAL ═══ */}
       <AddLinkModal

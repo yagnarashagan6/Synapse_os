@@ -19,24 +19,40 @@
     },
     {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "DELETE FROM documents\nWHERE metadata->>'file_id' = '{{ $json.body.file_id }}';",
+        "method": "DELETE",
+        "url": "https://jnkaaxcldsffpojyhufq.supabase.co/rest/v1/documents",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "metadata->>file_id",
+              "value": "=eq.{{ $json.body.file_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_SERVICE_KEY_HERE"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_SERVICE_KEY_HERE"
+            }
+          ]
+        },
         "options": {}
       },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         192,
         16
       ],
       "id": "314523da-ab0b-4e58-9ba5-badcb24e9a62",
-      "name": "Execute a SQL query",
-      "credentials": {
-        "postgres": {
-          "id": "NOBTxH0X1IvZpUld",
-          "name": "postgres sofia ai knowledgebase"
-        }
-      }
+      "name": "Supabase REST API Delete"
     }
   ],
   "pinData": {},
@@ -45,7 +61,7 @@
       "main": [
         [
           {
-            "node": "Execute a SQL query",
+            "node": "Supabase REST API Delete",
             "type": "main",
             "index": 0
           }

@@ -5,9 +5,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "rag-ingest",
-        "options": {
-          "rawBody": true
-        }
+        "options": {}
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -67,7 +65,8 @@
     {
       "parameters": {
         "dataType": "binary",
-        "loader": "textLoader",
+        "loader": "pdfLoader",
+        "binaryDataKey": "data",
         "textSplittingMode": "custom",
         "options": {
           "metadata": {
@@ -165,12 +164,5 @@
     "instanceId": "3426f7727e568b7c2dcd5da73f437b9fb23bfd46e46cbdb991a6b340651e62c0"
   },
   "id": "TP71ZQX5aZmEJr9N",
-  "tags": [
-    {
-      "updatedAt": "2025-12-26T09:21:22.728Z",
-      "createdAt": "2025-12-26T09:21:22.728Z",
-      "id": "rjXGjck16H40OGyQ",
-      "name": "Sofia external ⭐"
-    }
-  ]
+  "tags": []
 }

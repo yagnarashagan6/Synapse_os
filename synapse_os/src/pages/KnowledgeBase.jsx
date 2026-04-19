@@ -52,7 +52,67 @@ const formatDate = (dateStr) => {
   });
 };
 
+// ─── Helper: lightweight markdown renderer ──────────────────────────────────
+const MarkdownText = ({ text }) => {
+  if (!text) return null;
+  const lines = text.split("\n");
+  const elements = [];
+  let i = 0;
+  let listBuffer = [];
+  let listType = null;
+
+  const flushList = (key) => {
+    if (listBuffer.length === 0) return;
+    const Tag = listType === "ol" ? "ol" : "ul";
+    elements.push(
+      <Tag key={`list-${key}`} className={listType === "ol" ? "list-decimal list-inside space-y-1 my-2" : "list-disc list-inside space-y-1 my-2"}>
+        {listBuffer.map((item, j) => (
+          <li key={j} className="text-slate-300" dangerouslySetInnerHTML={{ __html: item }} />
+        ))}
+      </Tag>
+    );
+    listBuffer = [];
+    listType = null;
+  };
+
+  const renderInline = (str) =>
+    str
+      .replace(/\*\*(.+?)\*\*/g, "<strong class='text-white font-semibold'>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em class='italic text-slate-300'>$1</em>")
+      .replace(/`(.+?)`/g, "<code class='bg-slate-700 text-cyan-300 px-1 rounded text-xs font-mono'>$1</code>");
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^### (.+)/.test(line)) {
+      flushList(i);
+      elements.push(<h4 key={i} className="text-white font-semibold text-sm mt-3 mb-1" dangerouslySetInnerHTML={{ __html: renderInline(line.replace(/^### /, "")) }} />);
+    } else if (/^## (.+)/.test(line)) {
+      flushList(i);
+      elements.push(<h3 key={i} className="text-white font-bold text-sm mt-4 mb-1 border-b border-slate-700 pb-1" dangerouslySetInnerHTML={{ __html: renderInline(line.replace(/^## /, "")) }} />);
+    } else if (/^# (.+)/.test(line)) {
+      flushList(i);
+      elements.push(<h2 key={i} className="text-white font-bold text-base mt-4 mb-2" dangerouslySetInnerHTML={{ __html: renderInline(line.replace(/^# /, "")) }} />);
+    } else if (/^\d+\.\s(.+)/.test(line)) {
+      if (listType !== "ol") { flushList(i); listType = "ol"; }
+      listBuffer.push(renderInline(line.replace(/^\d+\.\s/, "")));
+    } else if (/^[-*]\s(.+)/.test(line)) {
+      if (listType !== "ul") { flushList(i); listType = "ul"; }
+      listBuffer.push(renderInline(line.replace(/^[-*]\s/, "")));
+    } else if (line.trim() === "") {
+      flushList(i);
+      elements.push(<div key={i} className="h-1.5" />);
+    } else {
+      flushList(i);
+      elements.push(<p key={i} className="text-slate-200 leading-relaxed" dangerouslySetInnerHTML={{ __html: renderInline(line) }} />);
+    }
+    i++;
+  }
+  flushList("end");
+  return <div className="text-sm space-y-0.5">{elements}</div>;
+};
+
 // ─── Helper: file type icon ─────────────────────────────────────────────────
+
 const FileIcon = ({ format, className = "" }) => {
   const iconMap = {
     pdf: <FileText className={`text-red-400 ${className}`} />,
@@ -894,7 +954,7 @@ const KnowledgeBase = () => {
           <Badge color="cyan" text="Testing Tool" icon={Zap} />
         </div>
 
-        <div ref={chatScrollRef} className="h-64 overflow-y-auto p-4 space-y-4 bg-slate-900/50">
+        <div ref={chatScrollRef} className="h-96 overflow-y-auto p-4 space-y-4 bg-slate-900/50">
           {chatMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-500">
               <Bot size={32} className="mb-2 opacity-50" />
@@ -911,7 +971,11 @@ const KnowledgeBase = () => {
                     ? "bg-red-500/20 border border-red-500/30 text-red-300 rounded-bl-none"
                     : "bg-slate-800 border border-slate-700 text-slate-200 rounded-bl-none"
                 }`}>
-                  {msg.content}
+                  {msg.role === "assistant" ? (
+                    <MarkdownText text={msg.content} />
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </div>
             ))

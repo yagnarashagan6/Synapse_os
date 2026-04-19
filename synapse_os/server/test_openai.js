@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 async function testKey() {
-  const apiKey = "YOUR_OPENAI_API_KEY_HERE";
+  const apiKey = process.env.OPENAI_API_KEY || "YOUR_OPENAI_API_KEY_HERE";
   try {
     const res = await axios.get("https://api.openai.com/v1/models", {
       headers: { Authorization: `Bearer ${apiKey}` }

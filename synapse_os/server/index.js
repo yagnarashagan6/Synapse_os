@@ -1582,9 +1582,10 @@ app.get("/api/video-generator/avatars", async (req, res) => {
   }
 
   try {
+    console.log("Fetching HeyGen avatars...");
     const response = await axios.get("https://api.heygen.com/v2/avatars", {
       headers: { "x-api-key": videoGeneratorApiKey },
-      timeout: 30000,
+      timeout: 60000,
     });
     res.json(response.data);
   } catch (error) {
@@ -1592,6 +1593,9 @@ app.get("/api/video-generator/avatars", async (req, res) => {
       "Video Generator avatars error:",
       error.response?.data || error.message,
     );
+    if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+      return res.status(504).json({ error: "Request to HeyGen timed out after 60s. Please try again." });
+    }
     res
       .status(error.response?.status || 500)
       .json(error.response?.data || { error: "Failed to fetch avatars" });
@@ -1610,9 +1614,10 @@ app.get("/api/video-generator/voices", async (req, res) => {
   }
 
   try {
+    console.log("Fetching HeyGen voices...");
     const response = await axios.get("https://api.heygen.com/v2/voices", {
       headers: { "x-api-key": videoGeneratorApiKey },
-      timeout: 30000,
+      timeout: 60000,
     });
     res.json(response.data);
   } catch (error) {
@@ -1620,6 +1625,9 @@ app.get("/api/video-generator/voices", async (req, res) => {
       "Video Generator voices error:",
       error.response?.data || error.message,
     );
+    if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+      return res.status(504).json({ error: "Request to HeyGen timed out after 60s. Please try again." });
+    }
     res
       .status(error.response?.status || 500)
       .json(error.response?.data || { error: "Failed to fetch voices" });

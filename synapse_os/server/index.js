@@ -1,4 +1,6 @@
 const express = require("express");
+const dns = require("dns");
+dns.setDefaultResultOrder("ipv4first");
 const cors = require("cors");
 const { createClient } = require("@supabase/supabase-js");
 const { ApifyClient } = require("apify-client");

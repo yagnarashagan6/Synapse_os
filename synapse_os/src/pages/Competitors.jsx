@@ -132,7 +132,7 @@ const CompanyMiniChart = ({ competitor }) => {
         </div>
       </div>
       <div style={{ width: '100%', height: 200 }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <LineChart data={data} margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
             <CartesianGrid strokeDasharray="4 4" stroke="#1e293b" vertical={false} />
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} dy={6} interval="preserveStartEnd" />

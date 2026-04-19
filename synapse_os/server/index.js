@@ -1579,7 +1579,10 @@ app.get("/api/video-generator/avatars", async (req, res) => {
   if (!videoGeneratorApiKey) {
     return res
       .status(500)
-      .json({ error: "Video Generator API key is not configured." });
+      .json({ 
+        error: "Video Generator API key is not configured on the Render server.",
+        details: "Please add VIDEO_GENERATOR_API_KEY to your Render environment variables." 
+      });
   }
 
   try {
@@ -1611,7 +1614,10 @@ app.get("/api/video-generator/voices", async (req, res) => {
   if (!videoGeneratorApiKey) {
     return res
       .status(500)
-      .json({ error: "Video Generator API key is not configured." });
+      .json({ 
+        error: "Video Generator API key is not configured on the Render server.",
+        details: "Please add VIDEO_GENERATOR_API_KEY to your Render environment variables." 
+      });
   }
 
   try {

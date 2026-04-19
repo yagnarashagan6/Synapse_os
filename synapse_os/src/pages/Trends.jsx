@@ -431,7 +431,7 @@ const Trends = () => {
             <div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : chartData && chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <LineChart data={chartData}>
               <CartesianGrid
                 strokeDasharray="3 3"

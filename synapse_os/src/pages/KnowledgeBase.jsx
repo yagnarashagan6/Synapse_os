@@ -31,8 +31,12 @@ import {
   ArrowRight,
   ExternalLink,
   Shield,
-  Bot
+  Bot,
 } from "lucide-react";
+
+// Global cache for Knowledge Base documents
+let globalDocsCache = null;
+let globalCountsCache = null;
 
 // ─── Helper: format file size ────────────────────────────────────────────────
 const formatSize = (bytes) => {
@@ -65,11 +69,22 @@ const MarkdownText = ({ text }) => {
     if (listBuffer.length === 0) return;
     const Tag = listType === "ol" ? "ol" : "ul";
     elements.push(
-      <Tag key={`list-${key}`} className={listType === "ol" ? "list-decimal list-inside space-y-1 my-2" : "list-disc list-inside space-y-1 my-2"}>
+      <Tag
+        key={`list-${key}`}
+        className={
+          listType === "ol"
+            ? "list-decimal list-inside space-y-1 my-2"
+            : "list-disc list-inside space-y-1 my-2"
+        }
+      >
         {listBuffer.map((item, j) => (
-          <li key={j} className="text-slate-300" dangerouslySetInnerHTML={{ __html: item }} />
+          <li
+            key={j}
+            className="text-slate-300"
+            dangerouslySetInnerHTML={{ __html: item }}
+          />
         ))}
-      </Tag>
+      </Tag>,
     );
     listBuffer = [];
     listType = null;
@@ -77,33 +92,75 @@ const MarkdownText = ({ text }) => {
 
   const renderInline = (str) =>
     str
-      .replace(/\*\*(.+?)\*\*/g, "<strong class='text-white font-semibold'>$1</strong>")
+      .replace(
+        /\*\*(.+?)\*\*/g,
+        "<strong class='text-white font-semibold'>$1</strong>",
+      )
       .replace(/\*(.+?)\*/g, "<em class='italic text-slate-300'>$1</em>")
-      .replace(/`(.+?)`/g, "<code class='bg-slate-700 text-cyan-300 px-1 rounded text-xs font-mono'>$1</code>");
+      .replace(
+        /`(.+?)`/g,
+        "<code class='bg-slate-700 text-cyan-300 px-1 rounded text-xs font-mono'>$1</code>",
+      );
 
   while (i < lines.length) {
     const line = lines[i];
     if (/^### (.+)/.test(line)) {
       flushList(i);
-      elements.push(<h4 key={i} className="text-white font-semibold text-sm mt-3 mb-1" dangerouslySetInnerHTML={{ __html: renderInline(line.replace(/^### /, "")) }} />);
+      elements.push(
+        <h4
+          key={i}
+          className="text-white font-semibold text-sm mt-3 mb-1"
+          dangerouslySetInnerHTML={{
+            __html: renderInline(line.replace(/^### /, "")),
+          }}
+        />,
+      );
     } else if (/^## (.+)/.test(line)) {
       flushList(i);
-      elements.push(<h3 key={i} className="text-white font-bold text-sm mt-4 mb-1 border-b border-slate-700 pb-1" dangerouslySetInnerHTML={{ __html: renderInline(line.replace(/^## /, "")) }} />);
+      elements.push(
+        <h3
+          key={i}
+          className="text-white font-bold text-sm mt-4 mb-1 border-b border-slate-700 pb-1"
+          dangerouslySetInnerHTML={{
+            __html: renderInline(line.replace(/^## /, "")),
+          }}
+        />,
+      );
     } else if (/^# (.+)/.test(line)) {
       flushList(i);
-      elements.push(<h2 key={i} className="text-white font-bold text-base mt-4 mb-2" dangerouslySetInnerHTML={{ __html: renderInline(line.replace(/^# /, "")) }} />);
+      elements.push(
+        <h2
+          key={i}
+          className="text-white font-bold text-base mt-4 mb-2"
+          dangerouslySetInnerHTML={{
+            __html: renderInline(line.replace(/^# /, "")),
+          }}
+        />,
+      );
     } else if (/^\d+\.\s(.+)/.test(line)) {
-      if (listType !== "ol") { flushList(i); listType = "ol"; }
+      if (listType !== "ol") {
+        flushList(i);
+        listType = "ol";
+      }
       listBuffer.push(renderInline(line.replace(/^\d+\.\s/, "")));
     } else if (/^[-*]\s(.+)/.test(line)) {
-      if (listType !== "ul") { flushList(i); listType = "ul"; }
+      if (listType !== "ul") {
+        flushList(i);
+        listType = "ul";
+      }
       listBuffer.push(renderInline(line.replace(/^[-*]\s/, "")));
     } else if (line.trim() === "") {
       flushList(i);
       elements.push(<div key={i} className="h-1.5" />);
     } else {
       flushList(i);
-      elements.push(<p key={i} className="text-slate-200 leading-relaxed" dangerouslySetInnerHTML={{ __html: renderInline(line) }} />);
+      elements.push(
+        <p
+          key={i}
+          className="text-slate-200 leading-relaxed"
+          dangerouslySetInnerHTML={{ __html: renderInline(line) }}
+        />,
+      );
     }
     i++;
   }
@@ -335,14 +392,16 @@ const ContentExample = ({ icon: Icon, title, description, color }) => (
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const KnowledgeBase = () => {
-  const [items, setItems] = useState([]);
-  const [counts, setCounts] = useState({
-    documents: 0,
-    links: 0,
-    guidelines: 0,
-  });
+  const [items, setItems] = useState(globalDocsCache || []);
+  const [counts, setCounts] = useState(
+    globalCountsCache || {
+      documents: 0,
+      links: 0,
+      guidelines: 0,
+    },
+  );
   const [activeTab, setActiveTab] = useState("all");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!globalDocsCache);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -350,7 +409,7 @@ const KnowledgeBase = () => {
   const [deletingId, setDeletingId] = useState(null);
   const fileInputRef = useRef(null);
   const chatScrollRef = useRef(null);
-  
+
   // Chatbot states
   const [chatQuery, setChatQuery] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
@@ -366,12 +425,19 @@ const KnowledgeBase = () => {
   // ─── Fetch items ───────────────────────────────────────────────────────────
   const fetchItems = useCallback(async () => {
     try {
+      if (!globalDocsCache) setIsLoading(true);
       const res = await fetch(`${API_BASE_URL}/api/knowledge-base`);
       const data = await res.json();
-      setItems(data.items || []);
-      setCounts(
-        data.counts || { documents: 0, links: 0, guidelines: 0 }
-      );
+
+      globalDocsCache = data.items || [];
+      globalCountsCache = data.counts || {
+        documents: 0,
+        links: 0,
+        guidelines: 0,
+      };
+
+      setItems(globalDocsCache);
+      setCounts(globalCountsCache);
     } catch (err) {
       console.error("Error fetching knowledge base:", err);
     } finally {
@@ -392,7 +458,8 @@ const KnowledgeBase = () => {
 
     // Filter for PDFs
     const validFiles = Array.from(files).filter(
-      (f) => f.name.toLowerCase().endsWith(".pdf") || f.type === "application/pdf"
+      (f) =>
+        f.name.toLowerCase().endsWith(".pdf") || f.type === "application/pdf",
     );
 
     if (validFiles.length === 0) {
@@ -486,7 +553,7 @@ const KnowledgeBase = () => {
   const handleChatSubmit = async (e) => {
     e.preventDefault();
     if (!chatQuery.trim() || isChatLoading) return;
-    
+
     const userMsg = { role: "user", content: chatQuery };
     setChatMessages((prev) => [...prev, userMsg]);
     setChatQuery("");
@@ -499,15 +566,24 @@ const KnowledgeBase = () => {
         body: JSON.stringify({ message: userMsg.content }),
       });
       const data = await res.json();
-      
+
       if (data.error) {
-        setChatMessages((prev) => [...prev, { role: "system", content: "Error: " + data.error }]);
+        setChatMessages((prev) => [
+          ...prev,
+          { role: "system", content: "Error: " + data.error },
+        ]);
       } else {
-        setChatMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+        setChatMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.reply },
+        ]);
       }
     } catch (err) {
       console.error("Chat error:", err);
-      setChatMessages((prev) => [...prev, { role: "system", content: "Connection error." }]);
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "system", content: "Connection error." },
+      ]);
     } finally {
       setIsChatLoading(false);
     }
@@ -638,10 +714,7 @@ const KnowledgeBase = () => {
 
           {isUploading ? (
             <div className="flex flex-col items-center gap-3">
-              <Loader2
-                size={40}
-                className="text-purple-400 animate-spin"
-              />
+              <Loader2 size={40} className="text-purple-400 animate-spin" />
               <p className="text-sm text-purple-400 font-medium">
                 Uploading & processing...
               </p>
@@ -718,10 +791,7 @@ const KnowledgeBase = () => {
 
         {isLoading ? (
           <Card className="flex items-center justify-center py-16">
-            <Loader2
-              size={32}
-              className="text-purple-400 animate-spin"
-            />
+            <Loader2 size={32} className="text-purple-400 animate-spin" />
           </Card>
         ) : filteredItems.length === 0 ? (
           <Card className="flex flex-col items-center justify-center py-16 text-center">
@@ -940,37 +1010,51 @@ const KnowledgeBase = () => {
       {/* ═══ KNOWLEDGE BASE CHATBOT ═══ */}
       <Card className="relative overflow-hidden border-cyan-500/30">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500 to-transparent" />
-        
+
         <div className="p-4 border-b border-slate-700/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
               <MessageSquare size={20} className="text-cyan-400" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">Test Knowledge RAG</h3>
-              <p className="text-xs text-slate-400">Ask questions to verify AI is fetching from your documents.</p>
+              <h3 className="text-lg font-semibold text-white">
+                Test Knowledge RAG
+              </h3>
+              <p className="text-xs text-slate-400">
+                Ask questions to verify AI is fetching from your documents.
+              </p>
             </div>
           </div>
           <Badge color="cyan" text="Testing Tool" icon={Zap} />
         </div>
 
-        <div ref={chatScrollRef} className="h-96 overflow-y-auto p-4 space-y-4 bg-slate-900/50">
+        <div
+          ref={chatScrollRef}
+          className="h-96 overflow-y-auto p-4 space-y-4 bg-slate-900/50"
+        >
           {chatMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-500">
               <Bot size={32} className="mb-2 opacity-50" />
               <p className="text-sm">No messages yet.</p>
-              <p className="text-xs mt-1">Ask something based on the uploaded PDFs!</p>
+              <p className="text-xs mt-1">
+                Ask something based on the uploaded PDFs!
+              </p>
             </div>
           ) : (
             chatMessages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                  msg.role === "user" 
-                    ? "bg-purple-600 text-white rounded-br-none" 
-                    : msg.role === "system"
-                    ? "bg-red-500/20 border border-red-500/30 text-red-300 rounded-bl-none"
-                    : "bg-slate-800 border border-slate-700 text-slate-200 rounded-bl-none"
-                }`}>
+              <div
+                key={i}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
+                    msg.role === "user"
+                      ? "bg-purple-600 text-white rounded-br-none"
+                      : msg.role === "system"
+                        ? "bg-red-500/20 border border-red-500/30 text-red-300 rounded-bl-none"
+                        : "bg-slate-800 border border-slate-700 text-slate-200 rounded-bl-none"
+                  }`}
+                >
                   {msg.role === "assistant" ? (
                     <MarkdownText text={msg.content} />
                   ) : (
@@ -1000,7 +1084,11 @@ const KnowledgeBase = () => {
               className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none text-sm"
               disabled={isChatLoading}
             />
-            <Button type="submit" variant="primary" disabled={isChatLoading || !chatQuery.trim()}>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={isChatLoading || !chatQuery.trim()}
+            >
               Send
             </Button>
           </form>

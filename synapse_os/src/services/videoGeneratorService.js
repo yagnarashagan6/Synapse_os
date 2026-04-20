@@ -376,3 +376,14 @@ export const transcribeAudio = async (blob, language) => {
   );
   return response.data.text || "";
 };
+
+/**
+ * Clones/creates an avatar using the API (Talking Photo / Camera upload)
+ */
+export const cloneAvatar = async (imageBase64, imageName) => {
+  const response = await axios.post(
+    `${API_BASE_URL}/api/video-generator/clone-avatar`,
+    { imageBase64, imageName },
+  );
+  return response.data;
+};

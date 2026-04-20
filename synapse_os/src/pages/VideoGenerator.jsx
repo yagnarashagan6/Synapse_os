@@ -27,6 +27,7 @@ import {
   Camera,
   Upload,
   MicOff,
+  Trash2,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import {
@@ -36,7 +37,12 @@ import {
   uploadImage,
   uploadVideoGeneratorAsset,
   transcribeAudio,
+  cloneAvatar,
 } from "../services/videoGeneratorService";
+
+// Global cache for Video Generator arrays so they don't reload on mount
+let globalAvatarsCache = null;
+let globalVoicesCache = null;
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const LANGUAGES = [
@@ -234,7 +240,11 @@ const VoiceCard = ({ voice, selected, onSelect }) => {
     e.stopPropagation();
     if (!voice.preview_audio) return;
     if (!audioRef.current) {
-      audioRef.current = new Audio(voice.preview_audio);
+      audioRef.current = new Audio(
+        voice.preview_audio.startsWith(String.fromCharCode(47))
+          ? API_BASE_URL + voice.preview_audio
+          : voice.preview_audio,
+      );
       audioRef.current.onended = () => setPlaying(false);
     }
     if (playing) {
@@ -325,14 +335,27 @@ export default function VideoGenerator() {
   useEffect(() => {
     let mounted = true;
     const loadData = async () => {
+      // Use cached arrays if already fetched (lazy loading fix for container switches)
+      if (globalAvatarsCache && globalVoicesCache) {
+        setAvatars(globalAvatarsCache);
+        setVoices(globalVoicesCache);
+        setLoadingAvatars(false);
+        setLoadingVoices(false);
+        return;
+      }
+
       try {
         const [avs, vos] = await Promise.all([
           getVideoGeneratorAvatars(),
           getVideoGeneratorVoices(),
         ]);
         if (!mounted) return;
-        setAvatars(avs || []);
-        setVoices(vos || []);
+
+        globalAvatarsCache = avs || [];
+        globalVoicesCache = vos || [];
+
+        setAvatars(globalAvatarsCache);
+        setVoices(globalVoicesCache);
       } catch (err) {
         if (!mounted) return;
         console.error("Failed to load Video Generator data", err);
@@ -417,7 +440,21 @@ export default function VideoGenerator() {
   const [genError, setGenError] = useState("");
 
   // Active tab
-  const [activeTab, setActiveTab] = useState("avatars"); // 'avatars' | 'voices' | 'elevenlabs' | 'settings'
+  const [activeTab, setActiveTab] = useState("avatars"); // 'avatars' | 'voices' | 'elevenlabs' | 'settings' | 'customAvatars'
+
+  // Custom Avatars State
+  const [customAvatars, setCustomAvatars] = useState([]);
+  const [isCloning, setIsCloning] = useState(false);
+  const [cloneImageName, setCloneImageName] = useState("");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("synapse_custom_avatars");
+    if (stored) {
+      try {
+        setCustomAvatars(JSON.parse(stored));
+      } catch (e) {}
+    }
+  }, []);
 
   // ElevenLabs State
   const [elevenLabsVoices, setElevenLabsVoices] = useState([]);
@@ -522,7 +559,7 @@ export default function VideoGenerator() {
           topic,
           platform: selectedPlatform.label,
           tone: "Professional",
-          cta: "Learn More",
+          cta: "Follow for more",
           language: voiceLang || "English",
         },
       );
@@ -576,6 +613,33 @@ export default function VideoGenerator() {
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
+    }
+  };
+
+  const handleDeleteElevenLabsVoice = async (e, voice) => {
+    e.stopPropagation();
+    if (!window.confirm("Delete cloned voice " + voice.name + "?")) return;
+    const toastId = toast.loading("Deleting voice...");
+    try {
+      await axios.delete(
+        API_BASE_URL +
+          "/api/video-generator/elevenlabs/voices/" +
+          voice.voice_id,
+      );
+      setElevenLabsVoices((prev) =>
+        prev.filter((v) => v.voice_id !== voice.voice_id),
+      );
+      if (selectedElevenLabsVoice?.voice_id === voice.voice_id) {
+        setSelectedElevenLabsVoice(null);
+      }
+      if (previewingVoiceId === voice.voice_id) {
+        voicePreviewRef.current?.pause();
+        setPreviewingVoiceId(null);
+      }
+      toast.success("Voice deleted", { id: toastId });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete voice", { id: toastId });
     }
   };
 
@@ -933,7 +997,11 @@ export default function VideoGenerator() {
       if (voicePreviewRef.current && previewingVoiceId) {
         voicePreviewRef.current.pause();
       }
-      voicePreviewRef.current = new Audio(voice.preview_url);
+      voicePreviewRef.current = new Audio(
+        voice.preview_url.startsWith(String.fromCharCode(47))
+          ? API_BASE_URL + voice.preview_url
+          : voice.preview_url,
+      );
       voicePreviewRef.current.onended = () => setPreviewingVoiceId(null);
       voicePreviewRef.current.play().catch(() => {});
       setPreviewingVoiceId(voice.voice_id);
@@ -954,7 +1022,16 @@ export default function VideoGenerator() {
           return res.data?.data?.video_url || "";
         }
         if (status === "failed") {
-          throw new Error("Video Generator reported video generation failed.");
+          const pollDataError = res.data?.data?.error;
+          const pollErrorCode = pollDataError?.code || "";
+          const pollErrorMsg =
+            pollDataError?.message ||
+            "Video Generator reported video generation failed.";
+          const specificErr =
+            pollErrorCode === "MOVIO_PAYMENT_INSUFFICIENT_CREDIT"
+              ? "HeyGen Account has 0 credits. Video was saved as a Draft but cannot render."
+              : pollErrorMsg;
+          throw new Error(specificErr);
         }
         setGenerationStatus(`Rendering... (${status || "processing"})`);
       } catch (err) {
@@ -964,6 +1041,46 @@ export default function VideoGenerator() {
     }
     throw new Error("Timed out waiting for video.");
   }, []);
+
+  const handleAvatarUpload = async (e) => {
+    let file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsCloning(true);
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result;
+      try {
+        const res = await cloneAvatar(base64, file.name);
+        if (res.success) {
+          const newAvatar = {
+            avatar_id: res.avatar_id,
+            name: res.name || "Custom Clone",
+            type: "custom",
+            preview_image_url: res.preview_url || base64,
+          };
+
+          setCustomAvatars((prev) => {
+            const updated = [newAvatar, ...prev];
+            localStorage.setItem(
+              "synapse_custom_avatars",
+              JSON.stringify(updated),
+            );
+            return updated;
+          });
+          toast.success("Avatar cloned successfully!");
+          setSelectedAvatar(newAvatar);
+        } else {
+          toast.error(res.error || "Failed to clone avatar");
+        }
+      } catch (err) {
+        toast.error("Failed to clone avatar: " + err.message);
+      } finally {
+        setIsCloning(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Generate video
   const handleGenerate = async () => {
@@ -1177,6 +1294,17 @@ export default function VideoGenerator() {
               </span>
             </button>
             <button
+              onClick={() => setActiveTab("customAvatars")}
+              className={tabClass("customAvatars")}
+            >
+              <span className="flex items-center gap-2">
+                <Camera size={14} /> Created Avatars
+                {selectedAvatar && selectedAvatar.type === "custom" && (
+                  <CheckCircle2 size={12} className="text-purple-300" />
+                )}
+              </span>
+            </button>
+            <button
               onClick={() => setActiveTab("settings")}
               className={tabClass("settings")}
             >
@@ -1245,13 +1373,16 @@ export default function VideoGenerator() {
               {selectedAvatar && (
                 <div className="mb-3 p-3 bg-purple-900/30 border border-purple-500/30 rounded-xl flex items-center gap-3">
                   <img
-                    src={selectedAvatar.preview_image_url}
-                    alt={selectedAvatar.avatar_name}
+                    src={
+                      selectedAvatar.preview_image_url ||
+                      selectedAvatar.imageUrl
+                    }
+                    alt={selectedAvatar.avatar_name || selectedAvatar.name}
                     className="w-10 h-10 rounded-lg object-cover"
                   />
                   <div>
                     <p className="text-sm font-medium text-white">
-                      {selectedAvatar.avatar_name}
+                      {selectedAvatar.avatar_name || selectedAvatar.name}
                     </p>
                     <p className="text-xs text-purple-300">Selected Avatar</p>
                   </div>
@@ -1319,6 +1450,87 @@ export default function VideoGenerator() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── CUSTOM AVATARS TAB ── */}
+          {activeTab === "customAvatars" && (
+            <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-white flex items-center gap-2">
+                  <Camera size={16} className="text-purple-400" /> Upload or
+                  Snap Custom Avatar
+                </h2>
+              </div>
+
+              {/* Upload Interface */}
+              <div className="bg-[#1a1b26] p-6 rounded-xl border border-white/5">
+                <p className="text-gray-400 text-sm mb-4">
+                  Take a photo using your camera or upload an image file to
+                  create a Talking Photo custom avatar.
+                </p>
+                <div className="flex items-center gap-4">
+                  <label className="flex-1 cursor-pointer flex flex-col items-center justify-center p-8 border-2 border-dashed border-white/10 rounded-xl hover:border-purple-500/50 hover:bg-white/5 transition-all text-gray-400">
+                    <Camera size={32} className="mb-2 opacity-60" />
+                    <span>Upload Photo or Take Picture</span>
+                    <span className="text-xs text-gray-500 mt-1">
+                      Accepts images
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      multiple={false}
+                      className="hidden"
+                      onChange={handleAvatarUpload}
+                      disabled={isCloning}
+                    />
+                  </label>
+                </div>
+                {isCloning && (
+                  <div className="mt-4 flex items-center justify-center text-purple-400 text-sm gap-2">
+                    <Loader2 size={16} className="animate-spin" /> Cloning
+                    Avatar...
+                  </div>
+                )}
+              </div>
+
+              {/* Created Avatars List */}
+              <div className="mt-6">
+                <h3 className="font-semibold text-white text-sm mb-3">
+                  Your Created Avatars
+                </h3>
+                {customAvatars.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 text-xs border border-white/5 border-dashed rounded-lg">
+                    No custom avatars created yet.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-4 2xl:grid-cols-6 gap-2 max-h-[440px] overflow-y-auto pr-1">
+                    {customAvatars.map((avatar) => (
+                      <div
+                        key={avatar.avatar_id}
+                        onClick={() => setSelectedAvatar(avatar)}
+                        className={`group relative cursor-pointer rounded-xl overflow-hidden bg-[#18181b] border-2 transition-all aspect-[3/4] ${
+                          selectedAvatar?.avatar_id === avatar.avatar_id
+                            ? "border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]"
+                            : "border-transparent hover:border-white/20"
+                        }`}
+                      >
+                        <img
+                          src={avatar.preview_image_url}
+                          alt={avatar.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/90 to-transparent">
+                          <p className="text-xs font-medium text-white truncate text-center">
+                            {avatar.name}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1444,6 +1656,17 @@ export default function VideoGenerator() {
                                     )}
                                 </div>
                               </div>
+                              {voice.category === "cloned" && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteElevenLabsVoice(e, voice);
+                                  }}
+                                  className="p-2 text-red-500/70 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                             </div>
                           ))
                       )}
@@ -1636,13 +1859,15 @@ export default function VideoGenerator() {
 
                     {cloneFiles.length > 0 && !cloneName.trim() && (
                       <p className="text-[10px] text-amber-400 mt-2 flex items-center gap-1">
-                        <AlertCircle size={10} /> Please provide a name for your voice clone.
+                        <AlertCircle size={10} /> Please provide a name for your
+                        voice clone.
                       </p>
                     )}
 
                     {cloneFiles.length > 25 && (
                       <p className="text-[10px] text-red-400 mt-2 flex items-center gap-1">
-                        <AlertCircle size={10} /> Maximum 25 samples allowed for voice cloning.
+                        <AlertCircle size={10} /> Maximum 25 samples allowed for
+                        voice cloning.
                       </p>
                     )}
 
@@ -2158,7 +2383,7 @@ export default function VideoGenerator() {
                 <div>
                   <p className="text-xs text-gray-400">Avatar</p>
                   <p className="text-sm font-medium text-white">
-                    {selectedAvatar?.avatar_name || (
+                    {selectedAvatar?.avatar_name || selectedAvatar?.name || (
                       <span className="text-gray-500 italic">Not selected</span>
                     )}
                   </p>
@@ -2172,7 +2397,7 @@ export default function VideoGenerator() {
                 <div>
                   <p className="text-xs text-gray-400">Voice</p>
                   <p className="text-sm font-medium text-white">
-                    {selectedVoice?.name || (
+                    {selectedElevenLabsVoice?.name || selectedVoice?.name || (
                       <span className="text-gray-500 italic">Not selected</span>
                     )}
                   </p>

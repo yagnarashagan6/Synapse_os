@@ -180,12 +180,13 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [activeWeek, setActiveWeek] = useState("all");
 
-  // Fetch Metricool account data
+  // Fetch Metricool account data (commented out for now to ensure hardcoded data is used)
   useEffect(() => {
+    /*
     const fetchMetricoolData = async () => {
       try {
         const res = await fetch(
-          `${API_BASE_URL}/api/sharing/metricool/accounts`
+          `${API_BASE_URL}/api/sharing/metricool/accounts`,
         );
         const data = await res.json();
         if (data.success && data.accounts) {
@@ -198,80 +199,25 @@ const Profile = () => {
       }
     };
     fetchMetricoolData();
+    */
+    setLoading(false);
   }, []);
 
   // Derive stats from Metricool data or use showcase defaults
   const stats = useMemo(() => {
+    /*
     // If we have real Metricool data, extract what we can
     if (metricoolData && typeof metricoolData === "object") {
       // Extract data from Metricool accounts response
       const accounts = Array.isArray(metricoolData)
         ? metricoolData
-        : metricoolData.data
-          ? Array.isArray(metricoolData.data)
-            ? metricoolData.data
-            : [metricoolData.data]
-          : [metricoolData];
-
-      let totalFollowers = 0;
-      let totalEngagement = 0;
-      let platformCount = 0;
-      let totalPosts = 0;
-
-      accounts.forEach((account) => {
-        if (account.followers || account.followersCount) {
-          totalFollowers += Number(account.followers || account.followersCount || 0);
-          platformCount++;
-        }
-        if (account.engagement || account.engagementRate) {
-          totalEngagement += Number(account.engagement || account.engagementRate || 0);
-        }
-        if (account.postsCount) {
-          totalPosts += Number(account.postsCount || 0);
-        }
-      });
-
-      if (totalFollowers > 0 || platformCount > 0) {
-        // Dynamically scale realistic metrics from their valid followers
-        const growth = Math.round(totalFollowers * 0.08) || 12; // roughly 8% growth
-        const reach = Math.round(totalFollowers * 3.8); // reach is often > followers
-        const active = Math.round(totalFollowers * 0.72); 
-        const engagement = totalEngagement > 0 ? (totalEngagement / Math.max(platformCount, 1)).toFixed(1) : 8.4;
-        
-        // Grab primary account profile data
-        const primaryAcc = accounts[0] || {};
-        
-        return {
-          followers: totalFollowers,
-          following: primaryAcc.followingCount || 0,
-          followerGrowth: growth,
-          followerGrowthPercent: 8,
-          engagementRate: engagement,
-          engagementChange: 1.2,
-          contentScore: 88,
-          contentScoreChange: 5,
-          audienceReach: reach,
-          audienceReachPercent: 12,
-          weeklyFollowers: Math.round(growth / 4) || 3,
-          dailyGrowth: Math.round(growth / 30) || 1,
-          postsPublished: totalPosts || 15,
-          bestPerforming: "Leadership",
-          activeUsers: active,
-          activeRate: 72,
-          targetReached: 91,
-          platformCount,
-          username: primaryAcc.username || "digimabbleproduct",
-          profileName: primaryAcc.profileName || "Digi Mabble",
-          bio: primaryAcc.bio || "Digi Mabble | AI. Innovation. Impact. 🚀\nEmpowering businesses with next-gen AI products 🤖\nSmart • Scalable • Modern 💡",
-          website: primaryAcc.website || "www.digimabble.com",
-        };
-      }
-    }
+        ...
+    */
 
     // Default showcase data matching the user's design
     return {
-      followers: 12400,
-      following: 119,
+      followers: 912,
+      following: 442,
       followerGrowth: 2840,
       followerGrowthPercent: 42,
       engagementRate: 8.4,
@@ -280,18 +226,18 @@ const Profile = () => {
       contentScoreChange: 18,
       audienceReach: 48300,
       audienceReachPercent: 67,
-      weeklyFollowers: 350,
+      weeklyFollowers: 12,
       dailyGrowth: 95,
-      postsPublished: 28,
-      bestPerforming: "Leadership",
+      postsPublished: 251,
+      bestPerforming: "Influence",
       activeUsers: 8900,
       activeRate: 72,
       targetReached: 94,
       platformCount: 1,
-      username: "digimabbleproduct",
-      profileName: "Digi Mabble",
-      bio: "Digi Mabble | AI. Innovation. Impact. 🚀\nEmpowering businesses with next-gen AI products 🤖\nSmart • Scalable • Modern 💡",
-      website: "www.digimabble.com",
+      username: "nabilakadiri_nld",
+      profileName: "Nabila Kadiri",
+      bio: "Je t’aide à imposer ta présence & ton impact\nInfluence • communication • décisions claires\nMéthodes ARC &...\nmore",
+      website: "bit.ly/4apL9Z7",
     };
   }, [metricoolData]);
 
@@ -304,10 +250,10 @@ const Profile = () => {
       name: week,
       Followers: Math.round(baseFollowers + weeklyIncrement * (i + 1)),
       Engagement: Math.round(
-        (stats.engagementRate - 2 + (2 / 3) * (i + 1)) * 100
+        (stats.engagementRate - 2 + (2 / 3) * (i + 1)) * 100,
       ),
       Reach: Math.round(
-        (stats.audienceReach / 4) * (0.6 + 0.15 * i) + Math.random() * 2000
+        (stats.audienceReach / 4) * (0.6 + 0.15 * i) + Math.random() * 2000,
       ),
     }));
   }, [stats]);
@@ -330,11 +276,17 @@ const Profile = () => {
           <div className="flex-shrink-0 relative">
             <div className="w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 p-[3px]">
               <div className="w-full h-full rounded-full border-4 border-slate-900 bg-slate-800 flex items-center justify-center overflow-hidden">
-                <span className="text-4xl font-bold text-white">DM</span>
-                {/* Fallback image if available could go here */}
+                <img
+                  src="/nabila.jpeg"
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                />
               </div>
             </div>
-            <div className="absolute bottom-1 right-1 bg-emerald-500 border-2 border-slate-900 w-6 h-6 rounded-full" title="Active"></div>
+            <div
+              className="absolute bottom-1 right-1 bg-emerald-500 border-2 border-slate-900 w-6 h-6 rounded-full"
+              title="Active"
+            ></div>
           </div>
 
           {/* Profile Details */}
@@ -344,7 +296,10 @@ const Profile = () => {
                 {stats.username}
               </h1>
               <div className="flex items-center gap-2">
-                <Badge variant="purple" className="flex items-center gap-1.5 px-3 py-1">
+                <Badge
+                  variant="purple"
+                  className="flex items-center gap-1.5 px-3 py-1"
+                >
                   <Sparkles size={12} />
                   Powered by Metricool
                 </Badge>
@@ -354,40 +309,63 @@ const Profile = () => {
             {/* Stats Row */}
             <div className="flex items-center gap-8 md:gap-10 mb-4 text-white">
               <div className="text-center md:text-left">
-                <span className="font-bold text-lg">{stats.postsPublished}</span>
-                <span className="text-slate-300 text-sm ml-1.5 hidden md:inline">posts</span>
+                <span className="font-bold text-lg">
+                  {stats.postsPublished}
+                </span>
+                <span className="text-slate-300 text-sm ml-1.5 hidden md:inline">
+                  posts
+                </span>
                 <div className="text-slate-300 text-xs md:hidden">posts</div>
               </div>
               <div className="text-center md:text-left cursor-pointer hover:opacity-80">
                 <span className="font-bold text-lg">{stats.followers}</span>
-                <span className="text-slate-300 text-sm ml-1.5 hidden md:inline">followers</span>
-                <div className="text-slate-300 text-xs md:hidden">followers</div>
+                <span className="text-slate-300 text-sm ml-1.5 hidden md:inline">
+                  followers
+                </span>
+                <div className="text-slate-300 text-xs md:hidden">
+                  followers
+                </div>
               </div>
               <div className="text-center md:text-left cursor-pointer hover:opacity-80">
                 <span className="font-bold text-lg">{stats.following}</span>
-                <span className="text-slate-300 text-sm ml-1.5 hidden md:inline">following</span>
-                <div className="text-slate-300 text-xs md:hidden">following</div>
+                <span className="text-slate-300 text-sm ml-1.5 hidden md:inline">
+                  following
+                </span>
+                <div className="text-slate-300 text-xs md:hidden">
+                  following
+                </div>
               </div>
             </div>
 
             {/* Bio */}
             <div className="text-white text-sm md:text-base max-w-lg space-y-1">
               <p className="font-bold">{stats.profileName}</p>
-              {stats.bio.split('\n').map((line, i) => (
-                <p key={i} className="text-slate-200">{line}</p>
+              {stats.bio.split("\n").map((line, i) => (
+                <p key={i} className="text-slate-200">
+                  {line}
+                </p>
               ))}
-              <a href={`https://${stats.website}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 font-medium break-all block mt-1">
+              <a
+                href={`https://${stats.website}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 font-medium break-all block mt-1"
+              >
                 {stats.website}
               </a>
             </div>
-            
+
             {/* This Week's Achievement Mini-Banner */}
             <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 inline-flex">
               <div className="p-1.5 bg-emerald-500/20 rounded-lg shrink-0">
                 <Award size={16} className="text-emerald-400" />
               </div>
               <p className="text-xs sm:text-sm text-slate-300">
-                You gained <span className="font-bold text-emerald-400">+{stats.weeklyFollowers} followers</span> this week thanks to Synapse OS.
+                You gained{" "}
+                <span className="font-bold text-emerald-400">
+                  +{stats.weeklyFollowers} followers
+                </span>{" "}
+                this week thanks to Synapse OS.
               </p>
             </div>
           </div>
@@ -461,7 +439,12 @@ const Profile = () => {
         </div>
 
         <div className="h-[280px] -mx-2">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+          <ResponsiveContainer
+            width="100%"
+            height={280}
+            minWidth={0}
+            minHeight={0}
+          >
             <AreaChart
               data={
                 activeWeek === "all"
@@ -517,8 +500,18 @@ const Profile = () => {
                 stroke="#8b5cf6"
                 strokeWidth={2.5}
                 fill="url(#followerGradient)"
-                dot={{ r: 4, fill: "#8b5cf6", strokeWidth: 2, stroke: "#1e1b4b" }}
-                activeDot={{ r: 6, stroke: "#8b5cf6", strokeWidth: 2, fill: "#fff" }}
+                dot={{
+                  r: 4,
+                  fill: "#8b5cf6",
+                  strokeWidth: 2,
+                  stroke: "#1e1b4b",
+                }}
+                activeDot={{
+                  r: 6,
+                  stroke: "#8b5cf6",
+                  strokeWidth: 2,
+                  fill: "#fff",
+                }}
               />
               <Area
                 type="monotone"
@@ -526,8 +519,18 @@ const Profile = () => {
                 stroke="#22d3ee"
                 strokeWidth={2}
                 fill="url(#engagementGradient)"
-                dot={{ r: 3, fill: "#22d3ee", strokeWidth: 2, stroke: "#0c4a6e" }}
-                activeDot={{ r: 5, stroke: "#22d3ee", strokeWidth: 2, fill: "#fff" }}
+                dot={{
+                  r: 3,
+                  fill: "#22d3ee",
+                  strokeWidth: 2,
+                  stroke: "#0c4a6e",
+                }}
+                activeDot={{
+                  r: 5,
+                  stroke: "#22d3ee",
+                  strokeWidth: 2,
+                  fill: "#fff",
+                }}
               />
             </AreaChart>
           </ResponsiveContainer>

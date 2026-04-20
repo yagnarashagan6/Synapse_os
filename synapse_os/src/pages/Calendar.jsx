@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -25,6 +26,7 @@ const SocialIcon = ({ type, className }) => {
 };
 
 const Calendar = () => {
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [postedEvents, setPostedEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -198,7 +200,7 @@ const Calendar = () => {
                 </div>
                 
                 <div className="mt-8">
-                    <Button className="w-full">Schedule Content</Button>
+                    <Button className="w-full" onClick={() => navigate('/approvals')}>Schedule Content</Button>
                 </div>
             </Card>
         </div>

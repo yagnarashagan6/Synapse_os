@@ -28,13 +28,23 @@ import {
 import { API_BASE_URL } from "../config/apiConfig";
 import { toast } from "react-hot-toast";
 
+let globalApprovalsCache = null;
+
 const Approvals = () => {
   const [selectedItemIdx, setSelectedItemIdx] = useState(0);
-  const [videos, setVideos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [videos, setVideos] = useState(globalApprovalsCache || []);
+  const [loading, setLoading] = useState(!globalApprovalsCache);
 
   useEffect(() => {
     const fetchVideos = async () => {
+      if (globalApprovalsCache) {
+        setVideos(globalApprovalsCache);
+        setLoading(false);
+        // We can do background fetch
+      } else {
+        setLoading(true);
+      }
+
       try {
         const data = await getVideos();
         // Convert video data to approval item format
@@ -88,8 +98,7 @@ const Approvals = () => {
 
         const combined = [...formatted, ...formattedTasks];
 
-        // Combine with existing defaults if any, but prioritize actual selected dynamic content
-        setVideos(
+        const finalData =
           combined.length > 0
             ? combined
             : [
@@ -107,8 +116,11 @@ const Approvals = () => {
                   language: "English",
                   is_video: false,
                 },
-              ],
-        );
+              ];
+
+        globalApprovalsCache = finalData;
+        setVideos(finalData);
+        setLoading(false);
       } catch (err) {
         console.error("Failed to fetch approvals:", err);
       } finally {
@@ -147,6 +159,7 @@ const Approvals = () => {
   ];
   const [selectedSharePlatforms, setSelectedSharePlatforms] = useState([]);
   const [isSharing, setIsSharing] = useState(false);
+  const [scheduleDateTime, setScheduleDateTime] = useState("");
   const [profileHandles, setProfileHandles] = useState({
     // Test/development defaults - Update with actual profile handles
     instagram: "digimabbleproduct",
@@ -207,7 +220,7 @@ const Approvals = () => {
           handles[plat] = c.name;
         });
         // Override Instagram to explicitly be "digimabbleproduct" as requested
-        handles['instagram'] = "digimabbleproduct";
+        handles["instagram"] = "digimabbleproduct";
         setProfileHandles(handles);
       } catch (err) {
         console.error("Failed to fetch profile handles", err);
@@ -329,23 +342,31 @@ const Approvals = () => {
         }
 
         console.log(`[Metricool] ✓ Success on ${platId}:`, data);
-        toast.success(`✓ Content properly posted in ${platId === 'instagram' ? 'instagram' : platId}!`);
-        
+        toast.success(
+          `✓ Content properly posted in ${platId === "instagram" ? "instagram" : platId}!`,
+        );
+
         // Save to calendar local storage
         const postedEvent = {
-          id: Date.now().toString() + Math.floor(Math.random()*100),
+          id: Date.now().toString() + Math.floor(Math.random() * 100),
           title: selectedItem.title,
           type: platId,
           handle: handle,
           content: description,
           video_url: selectedItem.video_url,
           image: selectedItem.image,
-          timestamp: new Date().toISOString(),
+          timestamp: scheduleDateTime ? new Date(scheduleDateTime).toISOString() : new Date().toISOString(),
+          isScheduled: !!scheduleDateTime,
         };
-        const existingEvents = JSON.parse(localStorage.getItem("synapse_posted_events") || "[]");
+        const existingEvents = JSON.parse(
+          localStorage.getItem("synapse_posted_events") || "[]",
+        );
         existingEvents.push(postedEvent);
-        localStorage.setItem("synapse_posted_events", JSON.stringify(existingEvents));
-        
+        localStorage.setItem(
+          "synapse_posted_events",
+          JSON.stringify(existingEvents),
+        );
+
         successCount++;
       } catch (err) {
         const errorMsg = err.message || "Unknown error";
@@ -610,47 +631,56 @@ const Approvals = () => {
               )}
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-3">
                 <Button
                   variant="danger"
-                  className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20"
+                  className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 text-xs px-3"
                   onClick={() => handleUpdateStatus("rejected")}
                   disabled={!selectedItem}
                 >
-                  <XCircle size={18} className="mr-2" /> Reject
+                  <XCircle size={14} className="mr-1.5" /> Reject
                 </Button>
                 <Button
                   variant="secondary"
-                  className="text-orange-400 hover:text-orange-300 border-orange-500/30 hover:bg-orange-500/10"
+                  className="text-orange-400 hover:text-orange-300 border-orange-500/30 hover:bg-orange-500/10 text-xs px-3"
                   onClick={() => handleUpdateStatus("in-progress")}
                   disabled={!selectedItem}
                 >
-                  <AlertCircle size={18} className="mr-2" /> Request Revision
+                  <AlertCircle size={14} className="mr-1.5" /> Request Revision
                 </Button>
-              </div>
-              <div className="flex gap-3">
                 <Button
                   variant="primary"
-                  className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/20"
+                  className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/20 text-xs px-3"
                   onClick={() => handleUpdateStatus("approved")}
                   disabled={!selectedItem}
                 >
-                  <CheckCircle size={18} className="mr-2" /> Approve Content
+                  <CheckCircle size={14} className="mr-1.5" /> Approve Content
                 </Button>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 flex-wrap">
+                <input
+                  type="datetime-local"
+                  value={scheduleDateTime}
+                  onChange={(e) => setScheduleDateTime(e.target.value)}
+                  className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-xl px-3 py-2 outline-none focus:border-purple-500 transition-colors"
+                />
                 <Button
                   onClick={handlePostMetricool}
                   disabled={isSharing || selectedSharePlatforms.length === 0}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 shadow-purple-500/20 text-white disabled:opacity-50"
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 shadow-purple-500/20 text-white disabled:opacity-50 text-sm px-4"
                 >
                   {isSharing ? (
-                    <Loader2 size={18} className="mr-2 animate-spin" />
+                    <Loader2 size={16} className="mr-2 animate-spin" />
                   ) : (
-                    <Send size={18} className="mr-2" />
+                    scheduleDateTime ? <Clock size={16} className="mr-2" /> : <Send size={16} className="mr-2" />
                   )}
                   {isSharing
-                    ? "Sharing..."
-                    : `Share (${selectedSharePlatforms.length})`}
+                    ? "Processing..."
+                    : scheduleDateTime
+                    ? `Schedule (${selectedSharePlatforms.length})` 
+                    : `Share Now (${selectedSharePlatforms.length})`}
                 </Button>
               </div>
             </div>

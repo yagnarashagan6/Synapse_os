@@ -17,7 +17,9 @@ require("dotenv").config();
 function extractTextFromPdfBuffer(buffer) {
   return new Promise((resolve, reject) => {
     const pdfParser = new PDFParser(null, 1);
-    pdfParser.on("pdfParser_dataError", (err) => reject(new Error(err.parserError)));
+    pdfParser.on("pdfParser_dataError", (err) =>
+      reject(new Error(err.parserError)),
+    );
     pdfParser.on("pdfParser_dataReady", () => {
       const text = pdfParser.getRawTextContent();
       // Clean up pdf2json formatting artifacts
@@ -40,7 +42,8 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // Swagger configuration
 const swaggerOptions = {
@@ -1030,18 +1033,8 @@ app.post("/api/video-generator/generate", async (req, res) => {
   }
 
   try {
-    const avatarsRes = await axios.get("https://api.heygen.com/v2/avatars", {
-      headers: { "x-api-key": videoGeneratorApiKey },
-      timeout: 15000,
-    });
-
-    const avatars = avatarsRes.data?.data?.avatars || [];
-    const avatar = avatars.length > 0 ? avatars[0] : null;
-    let avatarId =
-      req.body.avatar_id ||
-      (avatar ? avatar.avatar_id : "Angela-inTshirt-20220820");
-    let voiceId = req.body.voice_id || "1bd001e7e50f421d891986aad5158bc8";
-
+    let avatarId = req.body.avatar_id || "Abigail_expressive_2024112501";
+    let voiceId = req.body.voice_id || "f8c69e517f424cafaecde32dde57096b";
     const scriptInput =
       req.body.scriptText ||
       req.body.prompt ||
@@ -1049,9 +1042,11 @@ app.post("/api/video-generator/generate", async (req, res) => {
     const videoTitle = req.body.topic || "Synapse Video";
 
     // Support Custom Photo Avatars (talking_photo)
-    const isTalkingPhoto = req.body.avatar_type === "talking_photo";
+    const isTalkingPhoto =
+      req.body.avatar_type === "talking_photo" ||
+      req.body.avatar_type === "custom";
     const characterPayload = isTalkingPhoto
-      ? { type: "talking_photo", talking_photo_id: avatarId }
+      ? { type: "talking_photo", talking_photo_id: req.body.avatar_id }
       : {
           type: "avatar",
           avatar_id: avatarId,
@@ -1072,24 +1067,35 @@ app.post("/api/video-generator/generate", async (req, res) => {
       };
     }
 
+    const payload = {
+      title: videoTitle,
+      video_inputs: [
+        {
+          character: characterPayload,
+          voice: voicePayload,
+        },
+      ],
+    };
+
+    // Only apply explicit background and forced dimensions to standard 3D avatars
+    // HeyGen Talking Photos inherit the source image's aspect ratio and native background.
+    if (!isTalkingPhoto) {
+      payload.video_inputs[0].background = req.body.background || {
+        type: "color",
+        value: req.body.background_color || "#f5f5f5",
+      };
+      payload.dimension = {
+        width: req.body.width || 1080,
+        height: req.body.height || 1920,
+      };
+    }
+
     const response = await axios.post(
       "https://api.heygen.com/v2/video/generate",
       {
-        title: videoTitle,
-        video_inputs: [
-          {
-            character: characterPayload,
-            voice: voicePayload,
-            background: req.body.background || {
-              type: "color",
-              value: req.body.background_color || "#f5f5f5",
-            },
-          },
-        ],
-        dimension: {
-          width: req.body.width || 1080,
-          height: req.body.height || 1920,
-        },
+        ...payload,
+        test: true,
+        caption: false,
       },
       {
         headers: {
@@ -1147,68 +1153,8 @@ app.post("/api/video-generator/generate-and-wait", async (req, res) => {
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Content-Type-Options", "nosniff");
 
-    // 1. Use verified Abigail (Upper Body) + Allison voice IDs
-    //    These are confirmed from the Video Generator account avatars/voices list.
-    //    Dynamic lookup runs as fallback only if these names are not found.
-    const PREFERRED_AVATAR_NAME = "abigail (upper body)";
-    const PREFERRED_VOICE_NAME = "allison";
-    let avatarId = req.body.avatar_id || "Abigail_expressive_2024112501"; // Default: Abigail (Upper Body)
-    let voiceId = req.body.voice_id || "f8c69e517f424cafaecde32dde57096b"; // Default: Allison (English, Female)
-
-    try {
-      const [avatarsRes, voicesRes] = await Promise.all([
-        axios.get("https://api.heygen.com/v2/avatars", {
-          headers: { "x-api-key": videoGeneratorApiKey },
-          timeout: 15000,
-        }),
-        axios.get("https://api.heygen.com/v2/voices", {
-          headers: { "x-api-key": videoGeneratorApiKey },
-          timeout: 15000,
-        }),
-      ]);
-
-      // Find Abigail (Upper Body) by name
-      const avatars = avatarsRes.data?.data?.avatars || [];
-      const preferredAvatar =
-        avatars.find(
-          (a) => a.avatar_name.toLowerCase() === PREFERRED_AVATAR_NAME,
-        ) ||
-        avatars.find((a) => a.avatar_name.toLowerCase().includes("abigail"));
-      if (preferredAvatar) {
-        avatarId = preferredAvatar.avatar_id;
-        console.log(
-          `[Video Generator] Avatar: ${preferredAvatar.avatar_name} (${avatarId})`,
-        );
-      } else {
-        console.log(
-          `[Video Generator] Avatar: Using default Abigail Upper Body (${avatarId})`,
-        );
-      }
-
-      // Find Allison voice by name
-      const voices =
-        voicesRes.data?.data?.voices || voicesRes.data?.voices || [];
-      const preferredVoice =
-        voices.find(
-          (v) => (v.name || "").toLowerCase().trim() === PREFERRED_VOICE_NAME,
-        ) ||
-        voices.find((v) => (v.name || "").toLowerCase().includes("allison"));
-      if (preferredVoice) {
-        voiceId = preferredVoice.voice_id;
-        console.log(
-          `[Video Generator] Voice: ${preferredVoice.name?.trim()} (${voiceId})`,
-        );
-      } else {
-        console.log(
-          `[Video Generator] Voice: Using default Allison (${voiceId})`,
-        );
-      }
-    } catch (fetchErr) {
-      console.warn(
-        "[Video Generator] Could not fetch avatars/voices, using defaults:",
-        fetchErr.message,
-      );
-    }
+    let avatarId = req.body.avatar_id || "Abigail_expressive_2024112501";
+    let voiceId = req.body.voice_id || "f8c69e517f424cafaecde32dde57096b";
 
     // Trim script to prevent exceeding 15-second limit (~35 words max spoken at normal pace)
     const MAX_SCRIPT_WORDS = 35;
@@ -1229,35 +1175,48 @@ app.post("/api/video-generator/generate-and-wait", async (req, res) => {
     );
 
     // Support Custom Photo Avatars (talking_photo)
-    const isTalkingPhoto = req.body.avatar_type === "talking_photo";
+    const isTalkingPhoto =
+      req.body.avatar_type === "talking_photo" ||
+      req.body.avatar_type === "custom";
     const characterPayload = isTalkingPhoto
-      ? { type: "talking_photo", talking_photo_id: avatarId }
+      ? {
+          type: "talking_photo",
+          talking_photo_id: req.body.avatar_id || avatarId,
+        }
       : { type: "avatar", avatar_id: avatarId, avatar_style: "normal" };
+
+    const payload = {
+      title: videoTitle,
+      video_inputs: [
+        {
+          character: characterPayload,
+          voice:
+            req.body.voice_type === "audio" && req.body.audio_url
+              ? { type: "audio", audio_url: req.body.audio_url }
+              : {
+                  type: "text",
+                  input_text: trimmedScript,
+                  voice_id: voiceId,
+                  speed: 1.0,
+                  pitch: 0,
+                },
+        },
+      ],
+    };
+
+    if (!isTalkingPhoto) {
+      payload.video_inputs[0].background = req.body.background || {
+        type: "color",
+        value: req.body.background_color || "#f5f5f5",
+      };
+      payload.dimension = { width, height };
+    }
 
     const genRes = await axios.post(
       "https://api.heygen.com/v2/video/generate",
       {
-        title: videoTitle,
-        video_inputs: [
-          {
-            character: characterPayload,
-            voice:
-              req.body.voice_type === "audio" && req.body.audio_url
-                ? { type: "audio", audio_url: req.body.audio_url }
-                : {
-                    type: "text",
-                    input_text: trimmedScript,
-                    voice_id: voiceId,
-                    speed: 1.0,
-                    pitch: 0,
-                  },
-            background: req.body.background || {
-              type: "color",
-              value: req.body.background_color || "#f5f5f5",
-            },
-          },
-        ],
-        dimension: { width, height },
+        ...payload,
+        test: true,
         caption: false,
       },
       {
@@ -1577,12 +1536,11 @@ app.get("/api/video-generator/avatars", async (req, res) => {
     process.env.VIDEO_GENERATOR_API_KEY || ""
   ).trim();
   if (!videoGeneratorApiKey) {
-    return res
-      .status(500)
-      .json({ 
-        error: "Video Generator API key is not configured on the Render server.",
-        details: "Please add VIDEO_GENERATOR_API_KEY to your Render environment variables." 
-      });
+    return res.status(500).json({
+      error: "Video Generator API key is not configured on the Render server.",
+      details:
+        "Please add VIDEO_GENERATOR_API_KEY to your Render environment variables.",
+    });
   }
 
   try {
@@ -1598,7 +1556,9 @@ app.get("/api/video-generator/avatars", async (req, res) => {
       error.response?.data || error.message,
     );
     if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
-      return res.status(504).json({ error: "Request to HeyGen timed out after 60s. Please try again." });
+      return res.status(504).json({
+        error: "Request to HeyGen timed out after 60s. Please try again.",
+      });
     }
     res
       .status(error.response?.status || 500)
@@ -1612,12 +1572,11 @@ app.get("/api/video-generator/voices", async (req, res) => {
     process.env.VIDEO_GENERATOR_API_KEY || ""
   ).trim();
   if (!videoGeneratorApiKey) {
-    return res
-      .status(500)
-      .json({ 
-        error: "Video Generator API key is not configured on the Render server.",
-        details: "Please add VIDEO_GENERATOR_API_KEY to your Render environment variables." 
-      });
+    return res.status(500).json({
+      error: "Video Generator API key is not configured on the Render server.",
+      details:
+        "Please add VIDEO_GENERATOR_API_KEY to your Render environment variables.",
+    });
   }
 
   try {
@@ -1633,7 +1592,9 @@ app.get("/api/video-generator/voices", async (req, res) => {
       error.response?.data || error.message,
     );
     if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
-      return res.status(504).json({ error: "Request to HeyGen timed out after 60s. Please try again." });
+      return res.status(504).json({
+        error: "Request to HeyGen timed out after 60s. Please try again.",
+      });
     }
     res
       .status(error.response?.status || 500)
@@ -1672,8 +1633,16 @@ app.get("/api/video-generator/elevenlabs/voices", async (req, res) => {
         gender: voice.labels?.gender || "unknown",
         age: voice.labels?.age || "unknown",
         language: voice.fine_tuning?.language || "English",
-        preview_url: voice.preview_url || null,
-        preview_audio: voice.preview_url || null, // Alias
+        preview_url:
+          voice.preview_url ||
+          "/api/video-generator/elevenlabs/voices/" +
+            voice.voice_id +
+            "/sample",
+        preview_audio:
+          voice.preview_url ||
+          "/api/video-generator/elevenlabs/voices/" +
+            voice.voice_id +
+            "/sample", // Alias
         description: voice.description || "A versatile voice",
         use_case: voice.labels?.use_case || "general",
       };
@@ -1957,6 +1926,78 @@ app.get("/api/video-generator/elevenlabs/history", async (req, res) => {
   }
 });
 
+// GET /api/video-generator/elevenlabs/voices/:voice_id/sample - Stream cloned voice sample preview
+app.get(
+  "/api/video-generator/elevenlabs/voices/:voice_id/sample",
+  async (req, res) => {
+    try {
+      if (!ELEVENLABS_API_KEY)
+        return res.status(500).send("ElevenLabs API key not configured");
+      const { voice_id } = req.params;
+
+      // Get voice to find first sample
+      const voiceRes = await axios.get(
+        `https://api.elevenlabs.io/v1/voices/${voice_id}?with_settings=false`,
+        {
+          headers: { "xi-api-key": ELEVENLABS_API_KEY.trim() },
+          timeout: 10000,
+        },
+      );
+      const sampleId = voiceRes.data?.samples?.[0]?.sample_id;
+
+      if (!sampleId)
+        return res.status(404).send("No samples found for this voice");
+
+      // Stream the sample audio
+      const audioRes = await axios.get(
+        `https://api.elevenlabs.io/v1/voices/${voice_id}/samples/${sampleId}/audio`,
+        {
+          headers: { "xi-api-key": ELEVENLABS_API_KEY.trim() },
+          responseType: "stream",
+          timeout: 15000,
+        },
+      );
+
+      res.setHeader("Content-Type", "audio/mpeg");
+      audioRes.data.pipe(res);
+    } catch (error) {
+      console.error("ElevenLabs sample fetch error:", error.message);
+      res.status(error.response?.status || 500).send("Failed to fetch sample");
+    }
+  },
+);
+
+// DELETE /api/video-generator/elevenlabs/voices/:voice_id - Delete a voice
+app.delete(
+  "/api/video-generator/elevenlabs/voices/:voice_id",
+  async (req, res) => {
+    try {
+      if (!ELEVENLABS_API_KEY || ELEVENLABS_API_KEY.trim() === "") {
+        return res
+          .status(500)
+          .json({ error: "ElevenLabs API key not configured" });
+      }
+
+      const { voice_id } = req.params;
+      await axios.delete(`https://api.elevenlabs.io/v1/voices/${voice_id}`, {
+        headers: { "xi-api-key": ELEVENLABS_API_KEY.trim() },
+        timeout: 10000,
+      });
+
+      res.json({ status: "success", message: "Voice deleted successfully" });
+    } catch (error) {
+      console.error("ElevenLabs delete voice error:", {
+        status: error.response?.status,
+        message: error.message,
+      });
+      res.status(error.response?.status || 500).json({
+        error: "Failed to delete voice",
+        details: error.message,
+      });
+    }
+  },
+);
+
 // GET /api/video-generator/elevenlabs/voices/cloned - Get cloned voices (Pro feature)
 app.get("/api/video-generator/elevenlabs/voices/cloned", async (req, res) => {
   try {
@@ -1990,7 +2031,16 @@ app.get("/api/video-generator/elevenlabs/voices/cloned", async (req, res) => {
           accent: voice.labels?.accent || "custom",
           gender: voice.labels?.gender || "unknown",
           age: voice.labels?.age || "unknown",
-          preview_url: voice.preview_url || null,
+          preview_url:
+            voice.preview_url ||
+            "/api/video-generator/elevenlabs/voices/" +
+              voice.voice_id +
+              "/sample",
+          preview_audio:
+            voice.preview_url ||
+            "/api/video-generator/elevenlabs/voices/" +
+              voice.voice_id +
+              "/sample",
           description: voice.description || "Custom cloned voice",
         };
       });
@@ -2073,7 +2123,16 @@ app.post(
         gender: voice.labels?.gender || "unknown",
         age: voice.labels?.age || "unknown",
         language: voice.fine_tuning?.language || "English",
-        preview_url: voice.preview_url || null,
+        preview_url:
+          voice.preview_url ||
+          "/api/video-generator/elevenlabs/voices/" +
+            voice.voice_id +
+            "/sample",
+        preview_audio:
+          voice.preview_url ||
+          "/api/video-generator/elevenlabs/voices/" +
+            voice.voice_id +
+            "/sample",
         description: voice.description || "",
         use_case: voice.labels?.use_case || "custom",
       };
@@ -2084,14 +2143,21 @@ app.post(
         status: error.response?.status,
         message: error.message,
       });
-      const fs = require('fs');
+      const fs = require("fs");
       try {
-        fs.writeFileSync(__dirname + '/clone_error.json', JSON.stringify({
-            message: error.message,
-            response_data: error.response?.data,
-            response_status: error.response?.status
-        }, null, 2));
-      } catch(e) {}
+        fs.writeFileSync(
+          __dirname + "/clone_error.json",
+          JSON.stringify(
+            {
+              message: error.message,
+              response_data: error.response?.data,
+              response_status: error.response?.status,
+            },
+            null,
+            2,
+          ),
+        );
+      } catch (e) {}
 
       const statusCode = error.response?.status || 500;
       const errorMessage =
@@ -2126,14 +2192,14 @@ app.get("/api/sharing/metricool/accounts", async (req, res) => {
     // 1. Fetch connected accounts natively from Metricool
     const metricoolProfilesRes = await axios.get(
       "https://app.metricool.com/api/admin/simpleProfiles",
-      { headers: { "X-Mc-Auth": METRICOOL_API_KEY } }
+      { headers: { "X-Mc-Auth": METRICOOL_API_KEY } },
     );
-    
+
     const profiles = metricoolProfilesRes.data || [];
     let formatAccounts = [];
 
     // Filter to Instagram / Primary profiles
-    const igProfile = profiles.find(p => p.instagram);
+    const igProfile = profiles.find((p) => p.instagram);
 
     if (igProfile) {
       if (igProfile.instagram === "digimabbleproduct") {
@@ -2167,25 +2233,28 @@ app.get("/api/sharing/metricool/accounts", async (req, res) => {
 
     res.json({
       success: true,
-      accounts: formatAccounts.length > 0 ? formatAccounts : [
-        {
-          id: "fallback-id",
-          username: "digimabbleproduct",
-          platform: "instagram",
-          profileName: "Digi Mabble",
-          bio: "Digi Mabble | AI. Innovation. Impact. 🚀\nEmpowering businesses with next-gen AI products 🤖\nSmart • Scalable • Modern 💡",
-          website: "www.digimabble.com",
-          followersCount: 32,
-          followingCount: 119,
-          postsCount: 16,
-          engagementRate: 14.5
-        }
-      ]
+      accounts:
+        formatAccounts.length > 0
+          ? formatAccounts
+          : [
+              {
+                id: "fallback-id",
+                username: "digimabbleproduct",
+                platform: "instagram",
+                profileName: "Digi Mabble",
+                bio: "Digi Mabble | AI. Innovation. Impact. 🚀\nEmpowering businesses with next-gen AI products 🤖\nSmart • Scalable • Modern 💡",
+                website: "www.digimabble.com",
+                followersCount: 32,
+                followingCount: 119,
+                postsCount: 16,
+                engagementRate: 14.5,
+              },
+            ],
     });
   } catch (error) {
     console.error(
       "[Metricool] Error fetching mock analytics accounts:",
-      error.message
+      error.message,
     );
     res.status(500).json({
       error: "Failed to fetch Metricool accounts",
@@ -2221,7 +2290,7 @@ app.post("/api/sharing/metricool", async (req, res) => {
 
     const d = new Date();
     d.setMinutes(d.getMinutes() + 5); // Metricool needs a valid future publication date
-    const dtStr = d.toISOString().split('.')[0];
+    const dtStr = d.toISOString().split(".")[0];
 
     // Prepare the post data for Metricool API v2
     const postData = {
@@ -2231,10 +2300,10 @@ app.post("/api/sharing/metricool", async (req, res) => {
       autoPublish: true,
       publicationDate: {
         dateTime: dtStr,
-        timezone: "UTC"
-      }
+        timezone: "UTC",
+      },
     };
-    
+
     if (platform.toLowerCase() === "instagram") {
       postData.instagramData = { autoPublish: true };
     }
@@ -2246,17 +2315,13 @@ app.post("/api/sharing/metricool", async (req, res) => {
 
     const url = `https://app.metricool.com/api/v2/scheduler/posts?blogId=${METRICOOL_BLOG_ID}&userId=${METRICOOL_USER_ID}`;
 
-    const scheduleRes = await axios.post(
-      url,
-      postData,
-      {
-        headers: {
-          "X-Mc-Auth": METRICOOL_API_KEY,
-          "Content-Type": "application/json",
-        },
-        timeout: 30000,
+    const scheduleRes = await axios.post(url, postData, {
+      headers: {
+        "X-Mc-Auth": METRICOOL_API_KEY,
+        "Content-Type": "application/json",
       },
-    );
+      timeout: 30000,
+    });
 
     console.log(`[Metricool] Success response:`, scheduleRes.data);
     res.json({
@@ -2512,7 +2577,9 @@ app.post(
     const targetLanguage = req.body.language || "English";
 
     if (!groqApiKey && !openaiApiKey) {
-      return res.status(500).json({ error: "OpenAI or Groq API key not configured" });
+      return res
+        .status(500)
+        .json({ error: "OpenAI or Groq API key not configured" });
     }
     if (!req.file) {
       return res.status(400).json({ error: "No audio file provided" });
@@ -2522,27 +2589,24 @@ app.post(
       const formData = new FormData();
       const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
       formData.append("file", blob, req.file.originalname || "recording.webm");
-      
-      const apiUrl = openaiApiKey 
+
+      const apiUrl = openaiApiKey
         ? "https://api.openai.com/v1/audio/transcriptions"
         : "https://api.groq.com/openai/v1/audio/transcriptions";
-      
+
       formData.append("model", openaiApiKey ? "whisper-1" : "whisper-large-v3");
       formData.append(
         "prompt",
         `The following audio is meant to be transcribed natively. The target context language is ${targetLanguage}.`,
       );
 
-      const response = await fetch(
-        apiUrl,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${openaiApiKey || groqApiKey}`,
-          },
-          body: formData,
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openaiApiKey || groqApiKey}`,
         },
-      );
+        body: formData,
+      });
 
       const data = await response.json();
       if (!response.ok) {
@@ -2556,6 +2620,57 @@ app.post(
     }
   },
 );
+
+// POST /api/video-generator/clone-avatar
+app.post("/api/video-generator/clone-avatar", async (req, res) => {
+  const { imageBase64, imageName } = req.body;
+  const apiKey = (process.env.VIDEO_GENERATOR_API_KEY || "").trim();
+
+  if (!apiKey) {
+    return res.status(500).json({ error: "Video Generator API key missing" });
+  }
+  if (!imageBase64) {
+    return res.status(400).json({ error: "Missing imageBase64 data" });
+  }
+
+  try {
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+    const mimeMatch = imageBase64.match(/^data:(image\/\w+);base64,/);
+    const contentType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+    const buffer = Buffer.from(base64Data, "base64");
+
+    // Use HeyGen's talking photo upload endpoint
+    // It expects direct binary upload with the proper Content-Type
+    const uploadRes = await axios.post(
+      "https://upload.heygen.com/v1/talking_photo",
+      buffer,
+      {
+        headers: {
+          "x-api-key": apiKey,
+          "Content-Type": contentType,
+        },
+      },
+    );
+
+    const talkingPhotoId =
+      uploadRes.data?.data?.talking_photo_id ||
+      uploadRes.data?.data?.id ||
+      uploadRes.data?.id;
+
+    return res.status(200).json({
+      success: true,
+      avatar_id: talkingPhotoId,
+      preview_url: uploadRes.data?.data?.url || uploadRes.data?.url,
+      avatar_type: "talking_photo",
+      name: imageName || "Cloned Avatar",
+    });
+  } catch (error) {
+    console.error("Avatar clone error:", error.response?.data || error.message);
+    res
+      .status(error.response?.status || 500)
+      .json(error.response?.data || { error: "Failed to clone avatar" });
+  }
+});
 
 // POST /api/videos - Save generated video metadata to Supabase
 app.post("/api/videos", async (req, res) => {
@@ -2772,7 +2887,10 @@ app.get("/api/knowledge-base", async (req, res) => {
     const { data, error } = await query;
     if (error) {
       if (error.code === "42P01") {
-        return res.json({ items: [], counts: { documents: 0, links: 0, guidelines: 0 } });
+        return res.json({
+          items: [],
+          counts: { documents: 0, links: 0, guidelines: 0 },
+        });
       }
       throw error;
     }
@@ -2780,7 +2898,8 @@ app.get("/api/knowledge-base", async (req, res) => {
     const counts = {
       documents: (data || []).filter((d) => d.file_type === "document").length,
       links: (data || []).filter((d) => d.file_type === "link").length,
-      guidelines: (data || []).filter((d) => d.file_type === "guideline").length,
+      guidelines: (data || []).filter((d) => d.file_type === "guideline")
+        .length,
     };
 
     res.json({ items: data || [], counts });
@@ -2791,137 +2910,180 @@ app.get("/api/knowledge-base", async (req, res) => {
 });
 
 // POST /api/knowledge-base/upload - Upload a file for RAG ingestion (Direct processing, no n8n)
-app.post("/api/knowledge-base/upload", upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No file provided" });
-    }
-
-    const openaiApiKey = process.env.OPENAI_API_KEY;
-    if (!openaiApiKey) {
-      return res.status(500).json({ error: "OPENAI_API_KEY is required for RAG ingestion" });
-    }
-
-    const { originalname, mimetype, size, buffer } = req.file;
-    const fileType = req.body.file_type || "document";
-    const description = req.body.description || "";
-
-    // Determine file format from extension
-    const ext = originalname.split(".").pop().toLowerCase();
-    const formatMap = {
-      pdf: "pdf", doc: "docx", docx: "docx", txt: "txt", md: "md",
-      png: "image", jpg: "image", jpeg: "image", gif: "image", webp: "image",
-    };
-    const fileFormat = formatMap[ext] || ext;
-
-    // Generate a unique file_id for tracking in the vector store
-    const fileId = `kb_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
-    // 1. Save metadata to knowledge_base_files
-    const { data: record, error: insertError } = await supabase
-      .from("knowledge_base_files")
-      .insert([{
-        file_name: originalname,
-        file_type: fileType,
-        file_format: fileFormat,
-        file_size: size,
-        description,
-        status: "processing",
-        metadata: { file_id: fileId, mime_type: mimetype },
-      }])
-      .select()
-      .single();
-
-    if (insertError) throw insertError;
-
-    // Respond immediately so the UI doesn't wait
-    res.status(201).json({ message: "File uploaded, processing started", item: record });
-
-    // 2. Process the PDF in the background (extract text, chunk, embed, store)
-    (async () => {
-      try {
-        console.log(`[RAG] Starting ingestion for: ${originalname}`);
-
-        // 2a. Extract text from PDF using pure-JS extractor
-        let fullText = "";
-        
-        if (ext === "pdf") {
-          fullText = await extractTextFromPdfBuffer(buffer);
-          console.log(`[RAG] Extracted ${fullText.length} characters from PDF`);
-        } else {
-          // For txt, md files read as UTF-8 directly
-          fullText = buffer.toString("utf-8");
-          console.log(`[RAG] Read ${fullText.length} characters from text file`);
-        }
-
-        if (!fullText || fullText.trim().length < 20) {
-          console.error(`[RAG] No text extracted from ${originalname} (possibly a scanned/image PDF)`);
-          await supabase.from("knowledge_base_files").update({ status: "failed" }).eq("id", record.id);
-          return;
-        }
-
-        // 2b. Split text into chunks (1000 chars with 100 overlap)
-        const CHUNK_SIZE = 1000;
-        const CHUNK_OVERLAP = 100;
-        const chunks = [];
-        let start = 0;
-        while (start < fullText.length) {
-          const end = Math.min(start + CHUNK_SIZE, fullText.length);
-          chunks.push(fullText.slice(start, end));
-          start += CHUNK_SIZE - CHUNK_OVERLAP;
-        }
-
-        console.log(`[RAG] Split into ${chunks.length} chunks`);
-
-        // 2c. Generate embeddings for all chunks via OpenAI (batch)
-        const BATCH_SIZE = 20;
-        const allEmbeddings = [];
-        for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-          const batch = chunks.slice(i, i + BATCH_SIZE);
-          const embedRes = await axios.post(
-            "https://api.openai.com/v1/embeddings",
-            { input: batch, model: "text-embedding-ada-002" },
-            { headers: { Authorization: `Bearer ${openaiApiKey}` } }
-          );
-          for (const item of embedRes.data.data) {
-            allEmbeddings.push(item.embedding);
-          }
-          console.log(`[RAG] Embedded batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(chunks.length / BATCH_SIZE)}`);
-        }
-
-        // 2d. Insert into Supabase documents table
-        // NOTE: embedding must be a plain JS array (not JSON string) for pgvector to accept it
-        const rows = chunks.map((content, idx) => ({
-          content,
-          metadata: { file_id: fileId, file_name: originalname },
-          embedding: allEmbeddings[idx],
-        }));
-
-        // Insert in batches of 50
-        for (let i = 0; i < rows.length; i += 50) {
-          const batch = rows.slice(i, i + 50);
-          const { error: vecError } = await supabase.from("documents").insert(batch);
-          if (vecError) {
-            console.error(`[RAG] Supabase insert error (batch ${i}):`, vecError);
-            throw vecError;
-          }
-        }
-
-        // 2e. Mark as active
-        await supabase.from("knowledge_base_files").update({ status: "active" }).eq("id", record.id);
-        console.log(`[RAG] ✅ Successfully ingested ${originalname} (${chunks.length} chunks)`);
-
-      } catch (bgErr) {
-        console.error(`[RAG] ❌ Background ingestion failed for ${originalname}:`, bgErr?.response?.data || bgErr.message);
-        await supabase.from("knowledge_base_files").update({ status: "failed" }).eq("id", record.id);
+app.post(
+  "/api/knowledge-base/upload",
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file provided" });
       }
-    })();
 
-  } catch (error) {
-    console.error("Error uploading file:", error);
-    res.status(500).json({ error: "Failed to upload file" });
-  }
-});
+      const openaiApiKey = process.env.OPENAI_API_KEY;
+      if (!openaiApiKey) {
+        return res
+          .status(500)
+          .json({ error: "OPENAI_API_KEY is required for RAG ingestion" });
+      }
+
+      const { originalname, mimetype, size, buffer } = req.file;
+      const fileType = req.body.file_type || "document";
+      const description = req.body.description || "";
+
+      // Determine file format from extension
+      const ext = originalname.split(".").pop().toLowerCase();
+      const formatMap = {
+        pdf: "pdf",
+        doc: "docx",
+        docx: "docx",
+        txt: "txt",
+        md: "md",
+        png: "image",
+        jpg: "image",
+        jpeg: "image",
+        gif: "image",
+        webp: "image",
+      };
+      const fileFormat = formatMap[ext] || ext;
+
+      // Generate a unique file_id for tracking in the vector store
+      const fileId = `kb_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+      // 1. Save metadata to knowledge_base_files
+      const { data: record, error: insertError } = await supabase
+        .from("knowledge_base_files")
+        .insert([
+          {
+            file_name: originalname,
+            file_type: fileType,
+            file_format: fileFormat,
+            file_size: size,
+            description,
+            status: "processing",
+            metadata: { file_id: fileId, mime_type: mimetype },
+          },
+        ])
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Respond immediately so the UI doesn't wait
+      res
+        .status(201)
+        .json({ message: "File uploaded, processing started", item: record });
+
+      // 2. Process the PDF in the background (extract text, chunk, embed, store)
+      (async () => {
+        try {
+          console.log(`[RAG] Starting ingestion for: ${originalname}`);
+
+          // 2a. Extract text from PDF using pure-JS extractor
+          let fullText = "";
+
+          if (ext === "pdf") {
+            fullText = await extractTextFromPdfBuffer(buffer);
+            console.log(
+              `[RAG] Extracted ${fullText.length} characters from PDF`,
+            );
+          } else {
+            // For txt, md files read as UTF-8 directly
+            fullText = buffer.toString("utf-8");
+            console.log(
+              `[RAG] Read ${fullText.length} characters from text file`,
+            );
+          }
+
+          if (!fullText || fullText.trim().length < 20) {
+            console.error(
+              `[RAG] No text extracted from ${originalname} (possibly a scanned/image PDF)`,
+            );
+            await supabase
+              .from("knowledge_base_files")
+              .update({ status: "failed" })
+              .eq("id", record.id);
+            return;
+          }
+
+          // 2b. Split text into chunks (1000 chars with 100 overlap)
+          const CHUNK_SIZE = 1000;
+          const CHUNK_OVERLAP = 100;
+          const chunks = [];
+          let start = 0;
+          while (start < fullText.length) {
+            const end = Math.min(start + CHUNK_SIZE, fullText.length);
+            chunks.push(fullText.slice(start, end));
+            start += CHUNK_SIZE - CHUNK_OVERLAP;
+          }
+
+          console.log(`[RAG] Split into ${chunks.length} chunks`);
+
+          // 2c. Generate embeddings for all chunks via OpenAI (batch)
+          const BATCH_SIZE = 20;
+          const allEmbeddings = [];
+          for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+            const batch = chunks.slice(i, i + BATCH_SIZE);
+            const embedRes = await axios.post(
+              "https://api.openai.com/v1/embeddings",
+              { input: batch, model: "text-embedding-ada-002" },
+              { headers: { Authorization: `Bearer ${openaiApiKey}` } },
+            );
+            for (const item of embedRes.data.data) {
+              allEmbeddings.push(item.embedding);
+            }
+            console.log(
+              `[RAG] Embedded batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(chunks.length / BATCH_SIZE)}`,
+            );
+          }
+
+          // 2d. Insert into Supabase documents table
+          // NOTE: embedding must be a plain JS array (not JSON string) for pgvector to accept it
+          const rows = chunks.map((content, idx) => ({
+            content,
+            metadata: { file_id: fileId, file_name: originalname },
+            embedding: allEmbeddings[idx],
+          }));
+
+          // Insert in batches of 50
+          for (let i = 0; i < rows.length; i += 50) {
+            const batch = rows.slice(i, i + 50);
+            const { error: vecError } = await supabase
+              .from("documents")
+              .insert(batch);
+            if (vecError) {
+              console.error(
+                `[RAG] Supabase insert error (batch ${i}):`,
+                vecError,
+              );
+              throw vecError;
+            }
+          }
+
+          // 2e. Mark as active
+          await supabase
+            .from("knowledge_base_files")
+            .update({ status: "active" })
+            .eq("id", record.id);
+          console.log(
+            `[RAG] ✅ Successfully ingested ${originalname} (${chunks.length} chunks)`,
+          );
+        } catch (bgErr) {
+          console.error(
+            `[RAG] ❌ Background ingestion failed for ${originalname}:`,
+            bgErr?.response?.data || bgErr.message,
+          );
+          await supabase
+            .from("knowledge_base_files")
+            .update({ status: "failed" })
+            .eq("id", record.id);
+        }
+      })();
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      res.status(500).json({ error: "Failed to upload file" });
+    }
+  },
+);
 
 // POST /api/knowledge-base/link - Add a URL/link to knowledge base
 app.post("/api/knowledge-base/link", async (req, res) => {
@@ -3019,14 +3181,16 @@ app.post("/api/knowledge-base/chat", async (req, res) => {
     const groqApiKey = process.env.GROQ_API_KEY;
 
     if (!openaiApiKey) {
-      return res.status(400).json({ 
-        error: "OPENAI_API_KEY is not defined in server/.env! It is required to generate vector embeddings for your query to search the documents table." 
+      return res.status(400).json({
+        error:
+          "OPENAI_API_KEY is not defined in server/.env! It is required to generate vector embeddings for your query to search the documents table.",
       });
     }
 
     if (!groqApiKey && !openaiApiKey) {
-      return res.status(400).json({ 
-        error: "GROQ_API_KEY or OPENAI_API_KEY is required to generate the AI response." 
+      return res.status(400).json({
+        error:
+          "GROQ_API_KEY or OPENAI_API_KEY is required to generate the AI response.",
       });
     }
 
@@ -3035,27 +3199,37 @@ app.post("/api/knowledge-base/chat", async (req, res) => {
       "https://api.openai.com/v1/embeddings",
       {
         input: message,
-        model: "text-embedding-ada-002"
+        model: "text-embedding-ada-002",
       },
       {
-        headers: { Authorization: `Bearer ${openaiApiKey}` }
-      }
+        headers: { Authorization: `Bearer ${openaiApiKey}` },
+      },
     );
-    
-    if (!embedRes.data || !embedRes.data.data || embedRes.data.data.length === 0) {
+
+    if (
+      !embedRes.data ||
+      !embedRes.data.data ||
+      embedRes.data.data.length === 0
+    ) {
       throw new Error("Failed to generate embedding");
     }
     const queryEmbedding = embedRes.data.data[0].embedding;
 
     // 2. Perform vector search in Supabase
-    const { data: documents, error: matchError } = await supabase.rpc("match_documents", {
-      query_embedding: queryEmbedding,
-      match_count: 8,
-    });
+    const { data: documents, error: matchError } = await supabase.rpc(
+      "match_documents",
+      {
+        query_embedding: queryEmbedding,
+        match_count: 8,
+      },
+    );
 
     if (matchError) {
       if (matchError.code === "42883") {
-        return res.status(500).json({ error: "The match_documents function is missing from your Supabase database. Please run the SQL schema setup query first." });
+        return res.status(500).json({
+          error:
+            "The match_documents function is missing from your Supabase database. Please run the SQL schema setup query first.",
+        });
       }
       throw matchError;
     }
@@ -3063,10 +3237,14 @@ app.post("/api/knowledge-base/chat", async (req, res) => {
     // 3. Prepare the context for generation
     let contextStr = "No relevant context found in documents.";
     if (documents && documents.length > 0) {
-      contextStr = documents.map(doc => {
-        const sourceData = doc.metadata?.file_name ? `Source: ${doc.metadata.file_name}` : "";
-        return `${sourceData}\n${doc.content}`;
-      }).join("\n\n---\n\n");
+      contextStr = documents
+        .map((doc) => {
+          const sourceData = doc.metadata?.file_name
+            ? `Source: ${doc.metadata.file_name}`
+            : "";
+          return `${sourceData}\n${doc.content}`;
+        })
+        .join("\n\n---\n\n");
     }
 
     // 4. Send chat context plus prompt to LLM (OpenAI gpt-4o-mini)
@@ -3087,31 +3265,37 @@ Document Context (retrieved from uploaded knowledge base):
 ${contextStr}
 `;
 
-    console.log(`[RAG Chat] Query: "${message}" | Chunks: ${documents?.length || 0} | Context: ${contextStr.length} chars`);
+    console.log(
+      `[RAG Chat] Query: "${message}" | Chunks: ${documents?.length || 0} | Context: ${contextStr.length} chars`,
+    );
 
     const payload = {
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: message }
+        { role: "user", content: message },
       ],
       temperature: 0.3,
-      max_tokens: 1500
+      max_tokens: 1500,
     };
 
     const genRes = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       payload,
-      { headers: { Authorization: `Bearer ${openaiApiKey}` } }
+      { headers: { Authorization: `Bearer ${openaiApiKey}` } },
     );
 
     const reply = genRes.data.choices[0].message.content;
     console.log(`[RAG Chat] Reply preview: ${reply?.slice(0, 100)}`);
     res.json({ reply, contextFetched: documents ? documents.length : 0 });
-
   } catch (error) {
-    console.error("Error in Knowledge Base Chat:", error?.response?.data || error);
-    res.status(500).json({ error: "Failed to process chat: " + (error.message || "Unknown error") });
+    console.error(
+      "Error in Knowledge Base Chat:",
+      error?.response?.data || error,
+    );
+    res.status(500).json({
+      error: "Failed to process chat: " + (error.message || "Unknown error"),
+    });
   }
 });
 

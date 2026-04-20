@@ -521,6 +521,9 @@ const CompanyPanel = ({ info, metric, onClose }) => {
 // ─── Dashboard ─────────────────────────────────────────────────────────────────
 import { usePlatform } from "../context/PlatformContext";
 
+// Global cache for Dashboard competitors
+const globalDashboardCache = {};
+
 const Dashboard = () => {
   const { theme } = useTheme();
   const navigate = useNavigate();
@@ -549,21 +552,42 @@ const Dashboard = () => {
 
   // Fetch once on mount or when activePlatform changes
   useEffect(() => {
+    if (globalDashboardCache[activePlatform]) {
+      setCompetitors(globalDashboardCache[activePlatform]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     fetch(`${API_BASE_URL}/api/competitors?platform=${activePlatform}`)
       .then((r) => r.json())
-      .then((data) => setCompetitors(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const arr = Array.isArray(data) ? data : [];
+        globalDashboardCache[activePlatform] = arr;
+        setCompetitors(arr);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [activePlatform]);
 
   // Filter by platform, then by having latestPosts
   const platformCompetitors = filterByPlatform(competitors, activePlatform);
-  const activeCompanies = platformCompetitors.filter(
-    (c) =>
-      Array.isArray(c?.scrapedData?.latestPosts) &&
-      c.scrapedData.latestPosts.length > 0,
-  );
+
+  // Deduplicate companies by name to prevent Recharts duplicate key warnings
+  const uniqueCompaniesMap = new Map();
+  platformCompetitors
+    .filter(
+      (c) =>
+        Array.isArray(c?.scrapedData?.latestPosts) &&
+        c.scrapedData.latestPosts.length > 0,
+    )
+    .forEach((c) => {
+      // Prioritize the one marked primary if there's a duplicate name
+      if (!uniqueCompaniesMap.has(c.name) || c.isPrimary) {
+        uniqueCompaniesMap.set(c.name, c);
+      }
+    });
+
+  const activeCompanies = Array.from(uniqueCompaniesMap.values());
 
   // Get top 5 companies by followers for display (our company prioritized)
   const topFiveCompanies = React.useMemo(() => {
@@ -998,7 +1022,12 @@ const Dashboard = () => {
             </div>
           )}
 
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+          <ResponsiveContainer
+            width="100%"
+            height={340}
+            minWidth={0}
+            minHeight={0}
+          >
             <LineChart
               data={hasData && platformAvailable ? chartData : []}
               margin={{ top: 10, right: 20, left: 0, bottom: 10 }}

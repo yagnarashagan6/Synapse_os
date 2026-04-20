@@ -47,6 +47,9 @@ const ProgressBar = ({ value }) => (
   </div>
 );
 
+// Global cache for Trends competitors
+const globalTrendsCache = {};
+
 const Trends = () => {
   const { theme } = useTheme();
   const navigate = useNavigate();
@@ -58,10 +61,19 @@ const Trends = () => {
   const itemsPerPage = 10;
 
   React.useEffect(() => {
+    if (globalTrendsCache[activePlatform]) {
+      setCompetitors(globalTrendsCache[activePlatform]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     fetch(`${API_BASE_URL}/api/competitors?platform=${activePlatform}`)
       .then((r) => r.json())
-      .then((data) => setCompetitors(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const arr = Array.isArray(data) ? data : [];
+        globalTrendsCache[activePlatform] = arr;
+        setCompetitors(arr);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [activePlatform]);
@@ -168,39 +180,65 @@ const Trends = () => {
                 kpi.prev.comments += getComments(post);
               }
             }
+          } else {
+            periodData[bucket].compTotal += eng;
+            periodData[bucket].compCount += 1;
           }
 
           const caption = (post.caption || post.title || "").toLowerCase();
           const words = caption.split(/\W+/);
 
-          const stopWords = [
-            "instagram",
-            "linkedin",
-            "facebook",
-            "twitter",
-            "social",
-            "media",
-            "the",
-            "and",
-            "for",
-            "with",
-            "you",
-            "this",
-            "that",
-            "from",
-            "have",
-            "are",
-            "not",
-            "check",
-            "like",
-            "follow",
-            "share",
-          ];
-          const uniqueWords = [
-            ...new Set(
-              words.filter((w) => w.length > 5 && !stopWords.includes(w)),
-            ),
-          ].slice(0, 3);
+          // Simple NLP to extract hashtags or meaningful nouns as topics
+          const hashtags = caption.match(/#[a-z0-9_]+/g) || [];
+          const extractedHashtags = hashtags.map(
+            (h) => h.substring(1).charAt(0).toUpperCase() + h.substring(2),
+          );
+
+          let uniqueWords = [];
+          if (extractedHashtags.length > 0) {
+            uniqueWords = [...new Set(extractedHashtags)].slice(0, 2);
+          } else {
+            const stopWords = [
+              "instagram",
+              "linkedin",
+              "facebook",
+              "twitter",
+              "social",
+              "media",
+              "the",
+              "and",
+              "for",
+              "with",
+              "you",
+              "this",
+              "that",
+              "from",
+              "have",
+              "are",
+              "not",
+              "check",
+              "like",
+              "follow",
+              "share",
+              "what",
+              "where",
+              "when",
+              "why",
+              "how",
+              "your",
+              "their",
+              "will",
+              "would",
+              "could",
+              "should",
+            ];
+            // Look for longer words, filter out common verbs/adverbs (naively using stopWords + length)
+            uniqueWords = [
+              ...new Set(
+                words.filter((w) => w.length > 6 && !stopWords.includes(w)),
+              ),
+            ].slice(0, 1); // just one topic if we fall back to generic words
+          }
 
           uniqueWords.forEach((word) => {
             const label = word.charAt(0).toUpperCase() + word.slice(1);
@@ -285,14 +323,34 @@ const Trends = () => {
             { label: "Total Engagement", value: "—", inc: 0, up: true },
           ];
 
+      // Calculate absolute engagement points or percentage growth relative to max
+      const maxOur = Math.max(
+        ...Object.values(periodData).map((v) => v.ourCompany),
+        1,
+      );
+      const maxComp = Math.max(
+        ...Object.values(periodData).map(
+          (v) => v.compTotal / Math.max(1, v.compCount),
+        ),
+        1,
+      );
+
       const formattedChart = Object.entries(periodData)
         .sort(([, a], [, b]) => a._ts - b._ts)
         .map(([date, vals]) => {
           const othersCount = Math.max(1, vals.compCount || 1);
+          // Scale out of 100 to show understandable "Growth Index" relative to their own peak
+          const ourCompanyVal = kpi.name
+            ? Math.round((vals.ourCompany / maxOur) * 100)
+            : 0;
+          const allCompetitorsVal = Math.round(
+            (vals.compTotal / othersCount / maxComp) * 100,
+          );
+
           return {
             name: date,
-            "Our Company": kpi.name ? Math.round(vals.ourCompany) : 0,
-            "Competitors Avg": Math.round(vals.compTotal / othersCount),
+            "Our Company Growth Index": ourCompanyVal,
+            "Competitors Growth Index": allCompetitorsVal,
           };
         });
 
@@ -420,18 +478,62 @@ const Trends = () => {
       </div>
 
       <Card className="h-[400px]">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-          📊 Your Company vs Competitors
-        </h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-          Weekly engagement trend comparison (last 90 days)
-        </p>
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                📊 Your Company vs Competitors
+              </h3>
+              <div className="relative group/info">
+                <div className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help flex items-center justify-center w-5 h-5 rounded-full border border-slate-300 dark:border-slate-600">
+                  <span className="text-xs font-bold font-serif">i</span>
+                </div>
+                <div className="absolute z-50 right-0 mt-2 w-72 md:w-80 p-4 bg-slate-900 text-slate-200 text-xs rounded-xl shadow-2xl border border-slate-700 opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 pointer-events-none">
+                  <p className="font-bold text-white mb-2 text-sm border-b border-slate-700 pb-2">
+                    📈 Understanding the Growth Index
+                  </p>
+                  <ul className="space-y-2 list-disc pl-4 text-slate-300 leading-relaxed">
+                    <li>
+                      <strong className="text-purple-400">
+                        Growth Index (0-100%):
+                      </strong>{" "}
+                      We convert raw engagement (likes + comments + views) into
+                      a relative percentage based on each company's highest
+                      performing week.
+                    </li>
+                    <li>
+                      <strong className="text-purple-400">
+                        Fair Comparison:
+                      </strong>{" "}
+                      This makes it easy to compare a massive competitor against
+                      a newer account. You're comparing the <em>trajectory</em>{" "}
+                      rather than just the absolute numbers.
+                    </li>
+                    <li>
+                      <strong className="text-purple-400">Insight:</strong> Look
+                      for moments where your purple line spikes while the red
+                      line drops—these are your breakthrough content strategies!
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Weekly engagement trend comparison (last 90 days)
+            </p>
+          </div>
+        </div>
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : chartData && chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+          <ResponsiveContainer
+            width="100%"
+            height={256}
+            minWidth={0}
+            minHeight={0}
+          >
             <LineChart data={chartData}>
               <CartesianGrid
                 strokeDasharray="3 3"
@@ -451,9 +553,9 @@ const Trends = () => {
                 axisLine={false}
                 tickLine={false}
                 dx={-10}
-                tickFormatter={(v) =>
-                  v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v
-                }
+                tickFormatter={(v) => `${v}%`}
+                // show percentage
+                domain={[0, 100]}
               />
               <Tooltip
                 contentStyle={{
@@ -462,11 +564,12 @@ const Trends = () => {
                   borderRadius: "12px",
                   boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
                 }}
+                formatter={(value, name) => [`${value}%`, name]}
               />
               <Legend verticalAlign="top" height={36} />
               <Line
                 type="monotone"
-                dataKey="Our Company"
+                dataKey="Our Company Growth Index"
                 stroke="#8b5cf6"
                 strokeWidth={3}
                 dot={{ r: 4, strokeWidth: 2 }}
@@ -474,10 +577,9 @@ const Trends = () => {
               />
               <Line
                 type="monotone"
-                dataKey="Competitors Avg"
-                stroke="#64748b"
+                dataKey="Competitors Growth Index"
+                stroke="#f43f5e"
                 strokeWidth={3}
-                strokeDasharray="5 5"
                 dot={{ r: 4, strokeWidth: 2 }}
                 activeDot={{ r: 6 }}
               />
@@ -608,11 +710,15 @@ const Trends = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() =>
+                    onClick={() => {
+                      const contextStr =
+                        topic.snippets && topic.snippets.length > 0
+                          ? ` - Context: ${topic.snippets.join(" | ")}`
+                          : "";
                       navigate("/video-generator", {
-                        state: { defaultTopic: topic.topic },
-                      })
-                    }
+                        state: { defaultTopic: `${topic.topic}${contextStr}` },
+                      });
+                    }}
                     className="hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 p-2"
                     title="Create content about this topic"
                   >

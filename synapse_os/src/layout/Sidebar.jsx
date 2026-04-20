@@ -49,7 +49,15 @@ const Sidebar = ({ isOpen, onClose }) => {
         )
       }
     >
-      <item.icon size={20} />
+      {item.label === "My Profile" ? (
+        <img
+          src="/nabila.jpeg"
+          alt="Profile"
+          className="w-5 h-5 rounded-full object-cover border border-slate-700"
+        />
+      ) : (
+        <item.icon size={20} />
+      )}
       <span className="font-medium">{item.label}</span>
     </NavLink>
   );
